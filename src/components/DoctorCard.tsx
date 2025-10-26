@@ -13,6 +13,7 @@ interface DoctorCardProps {
   rating: number;
   available: boolean;
   image?: string;
+  consultationFee?: number;
 }
 
 const DoctorCard = ({
@@ -24,6 +25,7 @@ const DoctorCard = ({
   rating,
   available,
   image,
+  consultationFee,
 }: DoctorCardProps) => {
   return (
     <Card className="overflow-hidden shadow-card hover:shadow-hover transition-base">
@@ -62,6 +64,11 @@ const DoctorCard = ({
           <p className="text-sm text-muted-foreground">
             {experience} years experience
           </p>
+          {consultationFee && (
+            <p className="text-sm font-medium text-primary">
+              ₹{consultationFee} consultation fee
+            </p>
+          )}
         </div>
       </CardContent>
       <CardFooter className="p-6 pt-0">
