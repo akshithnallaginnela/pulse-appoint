@@ -8,17 +8,27 @@ const { validateObjectId } = require('../middleware/validation');
 
 const router = express.Router();
 
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// Initialize Razorpay (only if keys are provided)
+let razorpay = null;
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET && 
+    process.env.RAZORPAY_KEY_ID !== 'rzp_test_your_key_id_here') {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+}
 
 // @route   POST /api/payments/create-order
 // @desc    Create Razorpay order for appointment payment
 // @access  Private (Patient)
 router.post('/create-order', verifyToken, requirePatient, async (req, res) => {
   try {
+    if (!razorpay) {
+      return res.status(503).json({ 
+        message: 'Payment service is not configured. Please contact administrator.' 
+      });
+    }
+
     const { appointmentId } = req.body;
 
     if (!appointmentId) {
@@ -82,6 +92,12 @@ router.post('/create-order', verifyToken, requirePatient, async (req, res) => {
 // @access  Private (Patient)
 router.post('/verify', verifyToken, requirePatient, async (req, res) => {
   try {
+    if (!razorpay) {
+      return res.status(503).json({ 
+        message: 'Payment service is not configured. Please contact administrator.' 
+      });
+    }
+
     const { 
       razorpay_order_id, 
       razorpay_payment_id, 
