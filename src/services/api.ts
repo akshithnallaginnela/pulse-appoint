@@ -542,6 +542,19 @@ export const healthAPI = {
   },
 };
 
+// Chat API
+export const chatAPI = {
+  sendMessage: async (
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  ) => {
+    return apiRequest('/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, history }),
+    });
+  },
+};
+
 export default {
   authAPI,
   usersAPI,
@@ -550,4 +563,5 @@ export default {
   paymentsAPI,
   adminAPI,
   healthAPI,
+  chatAPI,
 };

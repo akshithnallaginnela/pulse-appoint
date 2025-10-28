@@ -4,30 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, MapPin, User } from "lucide-react";
-
-// Mock appointments data
-const mockAppointments = [
-  {
-    id: "1",
-    doctorName: "Dr. Sarah Johnson",
-    specialty: "Cardiologist",
-    date: "2025-11-05",
-    time: "10:00 AM",
-    location: "New York Medical Center",
-    status: "upcoming",
-  },
-  {
-    id: "2",
-    doctorName: "Dr. Michael Chen",
-    specialty: "Pediatrician",
-    date: "2025-10-28",
-    time: "2:30 PM",
-    location: "Children's Hospital",
-    status: "completed",
-  },
-];
+import { useAppointments } from "@/contexts/AppointmentsContext";
+import React, { useEffect } from "react";
 
 const Appointments = () => {
+  const { appointments, fetchAppointments, isLoading, cancelAppointment, rescheduleAppointment } = useAppointments();
+  const [rescheduleId, setRescheduleId] = React.useState<string | null>(null);
+  const [newDate, setNewDate] = React.useState("");
+  const [newTime, setNewTime] = React.useState("");
+  const [actionLoading, setActionLoading] = React.useState(false);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -42,8 +32,9 @@ const Appointments = () => {
           </div>
 
           <div className="space-y-6">
-            {mockAppointments.map((appointment) => (
-              <Card key={appointment.id} className="shadow-card hover:shadow-hover transition-base">
+            {isLoading && <p>Loading appointments...</p>}
+            {!isLoading && appointments.length > 0 && appointments.map((appointment) => (
+              <Card key={appointment._id} className="shadow-card hover:shadow-hover transition-base">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
@@ -51,14 +42,14 @@ const Appointments = () => {
                         <User className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <CardTitle className="text-xl">{appointment.doctorName}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{appointment.specialty}</p>
+                        <CardTitle className="text-xl">{appointment.doctorId?.specialization || "Doctor"}</CardTitle>
+                        <p className="text-sm text-muted-foreground">Fee: ₹{appointment.doctorId?.consultationFee}</p>
                       </div>
                     </div>
                     <Badge
                       variant="outline"
                       className={
-                        appointment.status === "upcoming"
+                        appointment.status === "confirmed"
                           ? "bg-accent/10 text-accent border-accent/20"
                           : "bg-muted text-muted-foreground"
                       }
@@ -71,29 +62,111 @@ const Appointments = () => {
                   <div className="grid md:grid-cols-3 gap-4 mb-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="h-4 w-4 text-primary" />
-                      <span className="text-sm">{new Date(appointment.date).toLocaleDateString()}</span>
+                      <span className="text-sm">{new Date(appointment.appointmentDate).toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-4 w-4 text-primary" />
-                      <span className="text-sm">{appointment.time}</span>
+                      <span className="text-sm">{appointment.appointmentTime}</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4 text-primary" />
-                      <span className="text-sm">{appointment.location}</span>
+                      <span className="text-sm">{appointment.reason}</span>
                     </div>
                   </div>
-                  {appointment.status === "upcoming" && (
+                  {appointment.status === "pending" && (
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">Reschedule</Button>
-                      <Button variant="destructive" size="sm">Cancel</Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRescheduleId(appointment._id)}
+                        disabled={actionLoading}
+                      >
+                        Reschedule
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={async () => {
+                          setActionLoading(true);
+                          try {
+                            await cancelAppointment(appointment._id);
+                            await fetchAppointments();
+                          } catch (err) {
+                            // Optionally show error
+                          } finally {
+                            setActionLoading(false);
+                          }
+                        }}
+                        disabled={actionLoading}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   )}
+      {/* Reschedule Modal */}
+      {rescheduleId && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+            <h2 className="text-xl font-bold mb-4">Reschedule Appointment</h2>
+            <div className="mb-2">
+              <label className="block text-sm font-medium mb-1">New Date</label>
+              <input
+                type="date"
+                className="border rounded px-2 py-1 w-full"
+                value={newDate}
+                onChange={e => setNewDate(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">New Time</label>
+              <input
+                type="time"
+                className="border rounded px-2 py-1 w-full"
+                value={newTime}
+                onChange={e => setNewTime(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  setActionLoading(true);
+                  try {
+                    await rescheduleAppointment(rescheduleId, newDate, newTime);
+                    await fetchAppointments();
+                    setRescheduleId(null);
+                    setNewDate("");
+                    setNewTime("");
+                  } catch (err) {
+                    // Optionally show error
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+                disabled={actionLoading || !newDate || !newTime}
+              >
+                Confirm
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRescheduleId(null);
+                  setNewDate("");
+                  setNewTime("");
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {mockAppointments.length === 0 && (
+          {!isLoading && appointments.length === 0 && (
             <Card className="shadow-card text-center py-12">
               <CardContent>
                 <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />

@@ -36,7 +36,8 @@ router.post('/', verifyToken, requirePatient, validateAppointmentBooking, async 
 
     // Check if doctor is available at the requested time
     const appointmentDateTime = new Date(appointmentDate);
-    const dayName = appointmentDateTime.toLocaleDateString('en-US', { weekday: 'lowercase' });
+    // Use 'long' for weekday and convert to lowercase
+    const dayName = appointmentDateTime.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     
     if (!doctor.isAvailableAt(dayName, appointmentTime)) {
       return res.status(400).json({ message: 'Doctor is not available at the requested time' });
