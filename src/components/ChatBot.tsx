@@ -3,6 +3,7 @@ import { MessageCircle, Send, X, MinusCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
+import { chatAPI } from '../services/api';
 
 interface Message {
   type: 'user' | 'bot';
@@ -39,48 +40,17 @@ const ChatBot = () => {
     setIsLoading(true);
 
     try {
-      console.log('Sending message:', userMessage);
-      const response = await fetch('http://localhost:5000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: userMessage }),
-      });
-
-      console.log('Response status:', response.status);
-      const contentType = response.headers.get('content-type');
-      console.log('Content-Type:', contentType);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(
-          errorText ? `Server error: ${errorText}` : 'Failed to get response from server'
-        );
-      }
-
-      const responseText = await response.text();
-      console.log('Raw response:', responseText);
-
-      if (!responseText) {
-        throw new Error('Empty response from server');
-      }
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error('JSON parse error:', e);
-        throw new Error('Invalid JSON response from server');
-      }
-
+      const history = messages.map(m => ({
+        role: m.type === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      }));
+      const data = await chatAPI.sendMessage(userMessage, history);
       setMessages(prev => [...prev, { type: 'bot', content: data.response }]);
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         type: 'bot', 
-        content: error.message || 'Sorry, I encountered an error. Please try again.' 
+        content: (error as Error).message || 'Sorry, I encountered an error. Please try again.' 
       }]);
     } finally {
       setIsLoading(false);
