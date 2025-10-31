@@ -7,6 +7,20 @@ const { validateAppointmentBooking, validateObjectId, validatePagination } = req
 
 const router = express.Router();
 
+const patientPopulateConfig = {
+  path: 'patientId',
+  select: 'firstName lastName email phone',
+};
+
+const doctorPopulateConfig = {
+  path: 'doctorId',
+  select: 'specialization consultationFee userId',
+  populate: {
+    path: 'userId',
+    select: 'firstName lastName',
+  },
+};
+
 // @route   POST /api/appointments
 // @desc    Book a new appointment
 // @access  Private (Patient)
@@ -77,10 +91,7 @@ router.post('/', verifyToken, requirePatient, validateAppointmentBooking, async 
     await appointment.save();
 
     // Populate the appointment with doctor and patient details
-    await appointment.populate([
-      { path: 'doctorId', select: 'specialization consultationFee' },
-      { path: 'patientId', select: 'firstName lastName email phone' }
-    ]);
+    await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
 
     res.status(201).json({
       message: 'Appointment booked successfully',
@@ -130,8 +141,8 @@ router.get('/', verifyToken, validatePagination, async (req, res) => {
     }
 
     const appointments = await Appointment.find(filter)
-      .populate('patientId', 'firstName lastName email phone')
-      .populate('doctorId', 'specialization consultationFee')
+      .populate(patientPopulateConfig)
+      .populate(doctorPopulateConfig)
       .sort({ appointmentDate: -1, appointmentTime: -1 })
       .skip(skip)
       .limit(limit);
@@ -161,8 +172,8 @@ router.get('/', verifyToken, validatePagination, async (req, res) => {
 router.get('/:id', verifyToken, validateObjectId('id'), async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id)
-      .populate('patientId', 'firstName lastName email phone')
-      .populate('doctorId', 'specialization consultationFee');
+      .populate(patientPopulateConfig)
+      .populate(doctorPopulateConfig);
 
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
@@ -210,6 +221,8 @@ router.put('/:id/confirm', verifyToken, requireDoctor, validateObjectId('id'), a
 
     appointment.status = 'confirmed';
     await appointment.save();
+
+    await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
 
     res.json({
       message: 'Appointment confirmed successfully',
@@ -265,6 +278,8 @@ router.put('/:id/cancel', verifyToken, validateObjectId('id'), async (req, res) 
     };
 
     await appointment.save();
+
+    await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
 
     res.json({
       message: 'Appointment cancelled successfully',
@@ -342,6 +357,8 @@ router.put('/:id/reschedule', verifyToken, validateObjectId('id'), async (req, r
 
     await appointment.save();
 
+    await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
+
     res.json({
       message: 'Appointment rescheduled successfully',
       appointment
@@ -385,6 +402,8 @@ router.put('/:id/complete', verifyToken, requireDoctor, validateObjectId('id'), 
 
     await appointment.save();
 
+    await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
+
     res.json({
       message: 'Appointment completed successfully',
       appointment
@@ -416,8 +435,8 @@ router.get('/upcoming/me', verifyToken, async (req, res) => {
     }
 
     const appointments = await Appointment.find(filter)
-      .populate('patientId', 'firstName lastName email phone')
-      .populate('doctorId', 'specialization consultationFee')
+      .populate(patientPopulateConfig)
+      .populate(doctorPopulateConfig)
       .sort({ appointmentDate: 1, appointmentTime: 1 })
       .limit(5);
 
@@ -459,8 +478,8 @@ router.get('/today/me', verifyToken, async (req, res) => {
     }
 
     const appointments = await Appointment.find(filter)
-      .populate('patientId', 'firstName lastName email phone')
-      .populate('doctorId', 'specialization consultationFee')
+      .populate(patientPopulateConfig)
+      .populate(doctorPopulateConfig)
       .sort({ appointmentTime: 1 });
 
     res.json({

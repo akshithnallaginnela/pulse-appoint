@@ -42,7 +42,16 @@ const Appointments = () => {
                         <User className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <CardTitle className="text-xl">{appointment.doctorId?.specialization || "Doctor"}</CardTitle>
+                        <CardTitle className="text-xl">
+                          {appointment.doctorId?.userId
+                            ? `Dr. ${appointment.doctorId.userId.firstName} ${appointment.doctorId.userId.lastName}`
+                            : 'Doctor'}
+                        </CardTitle>
+                        {appointment.doctorId?.specialization && (
+                          <p className="text-sm text-muted-foreground">
+                            {appointment.doctorId.specialization}
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground">Fee: ₹{appointment.doctorId?.consultationFee}</p>
                       </div>
                     </div>

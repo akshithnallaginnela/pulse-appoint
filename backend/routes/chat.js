@@ -37,6 +37,62 @@ function isOutOfScope(input) {
   return hasObviousNonDomain && !hasDomainHint;
 }
 
+function parseDateString(raw) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  let date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    date = new Date(trimmed);
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+    const [day, month, year] = trimmed.split('/');
+    date = new Date(`${year}-${month}-${day}`);
+  } else if (/^\d{2}[-.]\d{2}[-.]\d{4}$/.test(trimmed)) {
+    const seperator = trimmed.includes('-') ? '-' : '.';
+    const [day, month, year] = trimmed.split(seperator);
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    return null;
+  }
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
+function normalizeTime(raw) {
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase().replace(/\s+/g, '');
+  let match = cleaned.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+  if (!match) {
+    match = cleaned.match(/^(\d{1,2})(am|pm)$/);
+    if (match) {
+      let hour = parseInt(match[1], 10);
+      let minutes = '00';
+      const suffix = match[2];
+      if (suffix === 'pm' && hour !== 12) hour += 12;
+      if (suffix === 'am' && hour === 12) hour = 0;
+      return `${hour.toString().padStart(2, '0')}:${minutes}`;
+    }
+    return null;
+  }
+  let hour = parseInt(match[1], 10);
+  const minutes = match[2];
+  const suffix = match[3];
+  if (suffix === 'pm' && hour !== 12) hour += 12;
+  if (suffix === 'am' && hour === 12) hour = 0;
+  if (hour < 0 || hour > 23) return null;
+  return `${hour.toString().padStart(2, '0')}:${minutes}`;
+}
+
+function formatHumanDate(date) {
+  return date.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 router.post('/', optionalAuth, async (req, res) => {
   console.log('Received chat request');
   
@@ -62,22 +118,25 @@ router.post('/', optionalAuth, async (req, res) => {
       });
     }
 
+    const normalizedMessage = String(message);
+    const lower = normalizedMessage.toLowerCase();
+
     // Greeting intent
-    const greet = /^(hi|hello|hey|yo|namaste|hola)[!.\s]*$/i.test(String(message).trim());
+    const greet = /^(hi|hello|hey|yo|namaste|hola)[!.\s]*$/i.test(normalizedMessage.trim());
     if (greet) {
       return res.json({
-        response: 'Hi! I\'m PulseAssist. I can help you:\n- Book an appointment\n- Check your appointments\n- Find available doctors\nAsk me something like “Which doctors are available today?” or “What are my appointments?”.'
+        response: 'Hi! I\'m PulseAssist. I can help you:\n- Book an appointment\n- Check or cancel appointments\n- Find available doctors\nAsk me something like “Book Dr. Rao on 2025-02-03 at 10:30” or “Cancel my appointment on 2025-02-01 at 09:00”.'
       });
     }
 
     // Available doctors (optionally by specialization)
-    const askAvailDoctors = /(available\s+doctors|which\s+doctors\s+are\s+available|show\s+available\s+doctors|find\s+doctors)/i.test(String(message));
+    const askAvailDoctors = /(available\s+doctors|which\s+doctors\s+are\s+available|show\s+available\s+doctors|find\s+doctors)/i.test(normalizedMessage);
     if (askAvailDoctors) {
       try {
         const specializations = [
           'Cardiologist','Pediatrician','Dermatologist','Orthopedic Surgeon','General Physician','Neurologist','Gynecologist','Psychiatrist','Oncologist','Radiologist','Anesthesiologist','Emergency Medicine','Family Medicine','Internal Medicine','Ophthalmologist','ENT Specialist','Urologist','Endocrinologist','Gastroenterologist','Pulmonologist','Rheumatologist','Nephrologist','Hematologist','Infectious Disease','Other'
         ];
-        const text = String(message);
+        const text = normalizedMessage;
         const matchedSpec = specializations.find(s => new RegExp(s, 'i').test(text));
         const filter = { isActive: true, isVerified: true, ...(matchedSpec ? { specialization: matchedSpec } : {}) };
         const doctors = await Doctor.find(filter)
@@ -107,8 +166,176 @@ router.post('/', optionalAuth, async (req, res) => {
       }
     }
 
+    // Book appointment intent
+    const bookingIntent = /book\s+(an?\s+)?appointment/i.test(lower);
+    if (bookingIntent) {
+      if (!req.user) {
+        return res.json({ response: 'Please log in to book appointments. Go to Login, then try again.' });
+      }
+      if (req.user.role !== 'patient') {
+        return res.json({ response: 'Only patient accounts can book appointments via the assistant.' });
+      }
+
+      const doctorMatch = message.match(/dr\.?\s+([a-zA-Z]+)(?:\s+([a-zA-Z]+))?/i);
+      const dateMatch = message.match(/on\s+(\d{4}-\d{2}-\d{2}|\d{2}[\/.-]\d{2}[\/.-]\d{4})/i);
+      const timeMatch = message.match(/at\s+([0-9]{1,2}:[0-9]{2}(?:\s*[ap]m)?|[0-9]{1,2}\s*[ap]m)/i);
+      const reasonMatch = message.match(/for\s+(.+)/i);
+
+      if (!doctorMatch || !dateMatch || !timeMatch) {
+        return res.json({
+          response: 'To book via chat, say something like “Book an appointment with Dr. Sharma on 2025-02-05 at 10:00 for routine checkup.”'
+        });
+      }
+
+      const appointmentDate = parseDateString(dateMatch[1]);
+      const appointmentTime = normalizeTime(timeMatch[1]);
+      if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
+        return res.json({ response: 'I could not understand that date. Please use YYYY-MM-DD format.' });
+      }
+      if (!appointmentTime) {
+        return res.json({ response: 'I could not understand that time. Please use HH:MM (24h) or include am/pm.' });
+      }
+
+      const first = doctorMatch[1];
+      const last = doctorMatch[2];
+      const userQuery = last
+        ? { firstName: new RegExp(`^${first}$`, 'i'), lastName: new RegExp(`^${last}$`, 'i') }
+        : { firstName: new RegExp(`^${first}$`, 'i') };
+
+      try {
+        const doctor = await Doctor.find({ isActive: true, isVerified: true })
+          .populate({ path: 'userId', select: 'firstName lastName consultationFee', match: userQuery })
+          .then(list => list.find(d => d.userId));
+
+        if (!doctor) {
+          return res.json({ response: 'I could not find that doctor. Please check the name or search on the Doctors page.' });
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (appointmentDate < today) {
+          return res.json({ response: 'Appointment date must be in the future. Please pick another date.' });
+        }
+
+        const dayName = appointmentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        if (!doctor.isAvailableAt || !doctor.isAvailableAt(dayName, appointmentTime)) {
+          return res.json({ response: 'The doctor is not available at that time. Please choose another slot.' });
+        }
+
+        const existingAppointment = await Appointment.findOne({
+          doctorId: doctor._id,
+          appointmentDate,
+          appointmentTime,
+          status: { $nin: ['cancelled'] }
+        });
+
+        if (existingAppointment) {
+          return res.json({ response: 'That time slot is already booked. Please pick another time.' });
+        }
+
+        const reasonText = reasonMatch ? reasonMatch[1].trim() : 'General consultation';
+
+        const appointment = new Appointment({
+          patientId: req.user._id,
+          doctorId: doctor._id,
+          appointmentDate,
+          appointmentTime,
+          duration: doctor.consultationDuration,
+          reason: reasonText,
+          consultationType: 'in-person',
+          symptoms: [],
+          currentMedications: [],
+          allergies: [],
+          payment: {
+            amount: doctor.consultationFee,
+            status: 'pending'
+          }
+        });
+
+        await appointment.save();
+
+        const doctorName = `${doctor.userId.firstName} ${doctor.userId.lastName}`;
+        const dateDisplay = formatHumanDate(appointmentDate);
+        return res.json({
+          response: `Appointment booked with Dr. ${doctorName} on ${dateDisplay} at ${appointmentTime}. It is currently pending confirmation. You can manage it from the Appointments page.`
+        });
+      } catch (e) {
+        console.error('Chat booking error:', e);
+        return res.json({ response: 'I could not complete the booking. Please try again from the Appointments page.' });
+      }
+    }
+
+    // Cancel appointment intent
+    const cancelIntent = /(cancel|cancelling).*appointment/.test(lower);
+    if (cancelIntent) {
+      if (!req.user) {
+        return res.json({ response: 'Please log in to cancel appointments.' });
+      }
+      if (req.user.role !== 'patient') {
+        return res.json({ response: 'Only patient accounts can cancel appointments via the assistant.' });
+      }
+
+      const dateMatch = message.match(/on\s+(\d{4}-\d{2}-\d{2}|\d{2}[\/.-]\d{2}[\/.-]\d{4})/i);
+      const timeMatch = message.match(/at\s+([0-9]{1,2}:[0-9]{2}(?:\s*[ap]m)?|[0-9]{1,2}\s*[ap]m)/i);
+      const reasonMatch = message.match(/because\s+(.+)/i) || message.match(/for\s+(.+)/i);
+
+      if (!dateMatch || !timeMatch) {
+        return res.json({ response: 'Please tell me which appointment to cancel, for example “Cancel my appointment on 2025-02-01 at 09:00”.' });
+      }
+
+      const appointmentDate = parseDateString(dateMatch[1]);
+      const appointmentTime = normalizeTime(timeMatch[1]);
+      if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
+        return res.json({ response: 'I could not understand that date. Please use YYYY-MM-DD format.' });
+      }
+      if (!appointmentTime) {
+        return res.json({ response: 'I could not understand that time. Please use HH:MM (24h) or include am/pm.' });
+      }
+
+      const startOfDay = new Date(appointmentDate.getTime());
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+      try {
+        const appointment = await Appointment.findOne({
+          patientId: req.user._id,
+          appointmentDate: { $gte: startOfDay, $lt: endOfDay },
+          appointmentTime,
+          status: { $in: ['pending', 'confirmed', 'rescheduled'] }
+        });
+
+        if (!appointment) {
+          return res.json({ response: 'I could not find an appointment matching that time. Please check the details on the Appointments page.' });
+        }
+
+        if (!appointment.canBeCancelled()) {
+          return res.json({ response: 'That appointment can no longer be cancelled within 24 hours of the scheduled time.' });
+        }
+
+        const refundAmount = appointment.calculateRefund();
+        appointment.status = 'cancelled';
+        appointment.cancellation = {
+          cancelledBy: 'patient',
+          cancelledAt: new Date(),
+          reason: reasonMatch ? reasonMatch[1].trim() : 'Cancelled via assistant',
+          refundAmount,
+          refundStatus: refundAmount > 0 ? 'pending' : 'processed'
+        };
+
+        await appointment.save();
+
+        const dateDisplay = formatHumanDate(appointmentDate);
+        const refundText = refundAmount > 0 ? `Refund amount ₹${refundAmount} will be processed soon.` : 'No refund is due for this cancellation.';
+        return res.json({
+          response: `Your appointment on ${dateDisplay} at ${appointmentTime} has been cancelled. ${refundText}`
+        });
+      } catch (e) {
+        console.error('Chat cancellation error:', e);
+        return res.json({ response: 'I could not cancel the appointment. Please try from the Appointments page.' });
+      }
+    }
+
     // Specific doctor availability by name for today
-    const nameMatch = /(?:dr\.?\s+)([a-zA-Z]+)\s*([a-zA-Z]*)\b.*(available|availability|time|slot)/i.exec(String(message));
+    const nameMatch = /(?:dr\.?\s+)([a-zA-Z]+)\s*([a-zA-Z]*)\b.*(available|availability|time|slot)/i.exec(normalizedMessage);
     if (nameMatch) {
       try {
         const first = nameMatch[1];
@@ -139,7 +366,6 @@ router.post('/', optionalAuth, async (req, res) => {
     }
 
     // Simple intent: show user's appointments
-    const lower = String(message).toLowerCase();
     const asksAppointments = /(my\s+appointments|appointments\s*(today|upcoming)?|what\s+are\s+my\s+appointments|show\s+appointments|view\s+appointments)/.test(lower);
     if (asksAppointments) {
       if (!req.user) {
@@ -179,7 +405,7 @@ router.post('/', optionalAuth, async (req, res) => {
     
     try {
       console.log('Initializing model...');
-      const model = genAI.getGenerativeModel({
+      const model = genAI.getGenerativeModel({ 
         model: 'gemini-1.5-flash',
         systemInstruction: SYSTEM_CONTEXT,
         generationConfig: {
