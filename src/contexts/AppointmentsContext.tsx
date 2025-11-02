@@ -15,6 +15,11 @@ interface Appointment {
     _id: string;
     specialization: string;
     consultationFee: number;
+    userId?: {
+      _id: string;
+      firstName: string;
+      lastName: string;
+    };
   };
   appointmentDate: string;
   appointmentTime: string;

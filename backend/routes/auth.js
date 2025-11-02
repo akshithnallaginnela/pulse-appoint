@@ -51,6 +51,13 @@ router.post('/register', validateUserRegistration, async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    if (error && error.code === 11000) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+    if (error && error.name === 'ValidationError') {
+      const details = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ message: 'Validation failed', details });
+    }
     res.status(500).json({ message: 'Server error during registration' });
   }
 });
@@ -194,6 +201,15 @@ router.post('/register-doctor', validateUserRegistration, async (req, res) => {
     });
   } catch (error) {
     console.error('Doctor registration error:', error);
+    if (error && error.code === 11000) {
+      // Determine which unique field collided
+      const field = error.keyPattern?.email ? 'email' : error.keyPattern?.licenseNumber ? 'license number' : 'field';
+      return res.status(400).json({ message: `A user already exists with this ${field}` });
+    }
+    if (error && error.name === 'ValidationError') {
+      const details = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ message: 'Validation failed', details });
+    }
     res.status(500).json({ message: 'Server error during doctor registration' });
   }
 });
