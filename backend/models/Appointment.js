@@ -196,6 +196,12 @@ appointmentSchema.methods.canBeCancelled = function() {
   const appointmentDateTime = new Date(`${this.appointmentDate.toDateString()} ${this.appointmentTime}`);
   const hoursUntilAppointment = (appointmentDateTime - now) / (1000 * 60 * 60);
   
+  // Check if it's been less than 12 hours since booking
+  const hoursSinceBooking = (now - this.createdAt) / (1000 * 60 * 60);
+  if (hoursSinceBooking < 12) {
+    return false;
+  }
+  
   return this.status === 'confirmed' && hoursUntilAppointment > 24;
 };
 
