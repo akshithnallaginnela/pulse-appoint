@@ -93,6 +93,48 @@ function formatHumanDate(date) {
   });
 }
 
+// Clarification / follow-up intent helpers
+function isClarificationIntent(text) {
+  if (!text) return false;
+  const t = String(text).toLowerCase();
+  // short follow-ups like "why", "how come", "what do you mean", "explain"
+  return /\bwhy\b|\bwhy\s+can(?:'|\u2019)?t\b|\bhow\b|\bhow\s+come\b|\bwhat\s+do\s+you\s+mean\b|\bexplain\b|\bplease\s+explain\b/.test(t);
+}
+
+function generateClarificationResponse(lastAssistantContent, userMessage) {
+  if (!lastAssistantContent) return null;
+  const ctx = String(lastAssistantContent).toLowerCase();
+  const q = String(userMessage || '').toLowerCase();
+
+  // Cancellation rule explanation
+  if (ctx.includes('cannot be cancelled within 12 hours') || ctx.includes('within 12 hours')) {
+    return 'Appointments cannot be cancelled within 12 hours of the scheduled time because clinics need time to reallocate the slot. If you have an emergency, please contact the clinic directly — we can also show contact details on the Appointments page.';
+  }
+
+  // Authentication requirement
+  if (ctx.includes('please log in') || ctx.includes('log in to')) {
+    return 'You need to be logged in to perform this action so we can verify you are the patient who booked the appointment. Please open the Login page, sign in, then try cancelling again.';
+  }
+
+  // Not found / mismatch explanations
+  if (ctx.includes('i could not find that doctor') || ctx.includes('could not find any appointments') || ctx.includes('i could not find an appointment')) {
+    return 'I could not find an appointment matching those details. Please check the doctor name (use first and last name) and the date in DD-MM-YYYY format. You can also open the Appointments or Doctors page to verify details.';
+  }
+
+  // Doctor not available explanation
+  if (ctx.includes('not available at that time') || ctx.includes('has no free slots')) {
+    return 'The doctor does not have a free slot at that time. Try a different time or day, or I can show available doctors with nearby slots.';
+  }
+
+  // Generic clarification: echo prior assistant content and offer actionable next step
+  if (q.includes('why') || q.includes('how') || q.includes('explain')) {
+    const brief = ctx.split('\n')[0];
+    return `Here\'s why: ${brief}. If you want, tell me what you\'d like to do next (cancel, reschedule, or view details).`;
+  }
+
+  return null;
+}
+
 router.post('/', optionalAuth, async (req, res) => {
   console.log('Received chat request');
   
@@ -127,6 +169,18 @@ router.post('/', optionalAuth, async (req, res) => {
       return res.json({
         response: 'Hi! I\'m PulseAssist. I can help you:\n- Book an appointment\n- Check or cancel appointments\n- Find available doctors\nAsk me something like “Book Dr. Rao on 2025-02-03 at 10:30” or “Cancel my appointment on 2025-02-01 at 09:00”.'
       });
+    }
+
+    // Clarification / follow-up handling (e.g., user replies "why" after assistant says "cannot be cancelled within 12 hours")
+    if (isClarificationIntent(normalizedMessage) && Array.isArray(history) && history.length > 0) {
+      const lastAssistant = history[history.length - 1];
+      if (lastAssistant && lastAssistant.role === 'assistant') {
+        const clarReply = generateClarificationResponse(lastAssistant.content, normalizedMessage);
+        if (clarReply) {
+          console.log('Responding with clarification:', clarReply);
+          return res.json({ response: clarReply });
+        }
+      }
     }
 
     // Available doctors (optionally by specialization)
@@ -306,8 +360,17 @@ router.post('/', optionalAuth, async (req, res) => {
     }
 
     // Cancel appointment intent - With details
-    const cancelIntent = /(?:with\s+)?(?:dr\.?\s+|doctor\s+)?([a-zA-Z]+)(?:\s+([a-zA-Z]+))?\s+(?:on|for)\s+(\d{1,2}[-/.]\d{1,2}[-/.]\d{4})/i.test(normalizedMessage);
-    if (cancelIntent && lower.includes('cancel')) {
+    const isInCancelContext = history.length > 0 && 
+      history[history.length - 1]?.role === 'assistant' && 
+      history[history.length - 1]?.content?.includes('To cancel an appointment');
+
+    // Check if the message looks like an appointment reference
+    const appointmentPattern = /(?:dr\.?\s+|doctor\s+)?([a-zA-Z]+)\s+([a-zA-Z]+)\s+(?:on\s+)?(\d{1,2}[-/\.]\d{1,2}[-/\.]\d{4})(?:\s+(?:at\s+)?(\d{1,2}:\d{2}|\d{1,2}(?::\d{2})?\s*[AaPp][Mm]))?/i;
+    
+    const isCancellingAppointment = lower.includes('cancel') || isInCancelContext;
+    const match = normalizedMessage.match(appointmentPattern);
+    
+    if (isCancellingAppointment && match) {
       if (!req.user) {
         return res.json({ response: 'Please log in to cancel appointments.' });
       }
@@ -315,20 +378,35 @@ router.post('/', optionalAuth, async (req, res) => {
         return res.json({ response: 'Only patient accounts can cancel appointments via the assistant.' });
       }
 
-      const match = normalizedMessage.match(/(?:with\s+)?(?:dr\.?\s+|doctor\s+)?([a-zA-Z]+)(?:\s+([a-zA-Z]+))?\s+(?:on|for)\s+(\d{1,2}[-/.]\d{1,2}[-/.]\d{4})/i);
       const doctorFirstName = match[1];
       const doctorLastName = match[2];
-      const cancelDate = parseDateString(match[3]);
+      const dateStr = match[3];
 
+      const cancelDate = parseDateString(dateStr);
       if (!cancelDate || Number.isNaN(cancelDate.getTime())) {
         return res.json({ response: 'I could not understand that date. Please use DD-MM-YYYY format.' });
       }
 
-      const startOfDay = new Date(cancelDate.getTime());
+      console.log('Cancellation request:', {
+        doctorFirstName,
+        doctorLastName,
+        dateStr,
+        cancelDate,
+        time: match[4]
+      });
+
+      const startOfDay = new Date(cancelDate);
       startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+      const endOfDay = new Date(startOfDay);
+      endOfDay.setDate(endOfDay.getDate() + 1);
 
       try {
+        console.log('Searching for appointments with criteria:', {
+          patientId: req.user._id,
+          date: startOfDay,
+          doctorName: `${doctorFirstName} ${doctorLastName}`
+        });
+
         const appointments = await Appointment.find({
           patientId: req.user._id,
           appointmentDate: { $gte: startOfDay, $lt: endOfDay },
@@ -337,30 +415,62 @@ router.post('/', optionalAuth, async (req, res) => {
         .populate('doctorId')
         .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName' } });
 
+        console.log('Found appointments:', appointments.length);
+
         if (!appointments || appointments.length === 0) {
           return res.json({ response: 'I could not find any appointments for that date. Please check the details and try again.' });
         }
 
-        // Match the doctor if specified
+        // Match the doctor (and optionally time) if specified
+        const requestedTimeNormalized = match[4] ? normalizeTime(match[4]) : null;
         const appointment = appointments.find(a => {
-          if (!a.doctorId?.userId) return false;
+          if (!a.doctorId?.userId) {
+            console.log('No doctor user data for appointment:', a._id);
+            return false;
+          }
           const docFirst = a.doctorId.userId.firstName;
           const docLast = a.doctorId.userId.lastName;
-          if (doctorLastName) {
-            return docFirst?.toLowerCase() === doctorFirstName.toLowerCase() && 
-                   docLast?.toLowerCase() === doctorLastName.toLowerCase();
+
+          const firstNameMatch = docFirst?.toLowerCase() === doctorFirstName.toLowerCase();
+          const lastNameMatch = docLast?.toLowerCase() === doctorLastName.toLowerCase();
+
+          const apptTimeNormalized = normalizeTime(a.appointmentTime);
+          if (requestedTimeNormalized && apptTimeNormalized) {
+            // require both name and exact time match when user specified time
+            const timeMatch = apptTimeNormalized === requestedTimeNormalized;
+            console.log('Comparing doctor names and time:', {
+              provided: `${doctorFirstName} ${doctorLastName} @ ${requestedTimeNormalized}`,
+              actual: `${docFirst} ${docLast} @ ${apptTimeNormalized}`,
+              nameMatches: firstNameMatch && lastNameMatch,
+              timeMatches: timeMatch
+            });
+            return firstNameMatch && lastNameMatch && timeMatch;
           }
-          return docFirst?.toLowerCase() === doctorFirstName.toLowerCase();
+
+          console.log('Comparing doctor names:', {
+            provided: `${doctorFirstName} ${doctorLastName}`,
+            actual: `${docFirst} ${docLast}`,
+            matches: firstNameMatch && lastNameMatch
+          });
+
+          return firstNameMatch && lastNameMatch;
         });
 
         if (!appointment) {
           return res.json({ response: 'I could not find an appointment with that doctor on that date. Please check the details and try again.' });
         }
 
-        // Check if appointment is within 12 hours of scheduled time
-        const appointmentTime = new Date(appointment.appointmentDate);
+        // Build scheduled datetime (combine date + stored appointmentTime) for an accurate 12-hour check
+        const scheduled = new Date(appointment.appointmentDate);
+        if (appointment.appointmentTime) {
+          const apptNorm = normalizeTime(appointment.appointmentTime);
+          if (apptNorm) {
+            const [hh, mm] = apptNorm.split(':').map(n => parseInt(n, 10));
+            scheduled.setHours(hh, mm, 0, 0);
+          }
+        }
         const now = new Date();
-        const hoursDiff = (appointmentTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+        const hoursDiff = (scheduled.getTime() - now.getTime()) / (1000 * 60 * 60);
         
         if (hoursDiff < 12) {
           return res.json({ 
@@ -429,14 +539,16 @@ router.post('/', optionalAuth, async (req, res) => {
       }
     }
 
-        // Handle advanced intents with Gemini
-    console.log('Initializing chat with API key:', apiKey ? 'Present' : 'Missing');
-    
+            // Handle advanced intents with Gemini for general assistance
     try {
-      console.log('Initializing model...');
+      if (!genAI) {
+        return res.json({
+          response: 'I can help with PulseAppoint features like booking appointments or finding doctors. What would you like to do?'
+        });
+      }
+
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-1.5-flash',
-        systemInstruction: SYSTEM_CONTEXT,
         generationConfig: {
           temperature: 0.3,
           topP: 0.8,
@@ -445,47 +557,54 @@ router.post('/', optionalAuth, async (req, res) => {
         },
       });
 
-      console.log('Preparing contents from history...');
+      // Build conversation history for context
       const contents = [];
-      // Map prior messages if provided
       if (Array.isArray(history)) {
         for (const item of history) {
-          if (!item || !item.role || !item.content) continue;
+          if (!item?.role || !item?.content) continue;
           const role = item.role === 'assistant' ? 'model' : 'user';
           contents.push({ role, parts: [{ text: String(item.content) }] });
         }
       }
-      // Append current user message
       contents.push({ role: 'user', parts: [{ text: String(message) }] });
 
-      console.log('Sending request to Gemini API...');
-      const result = await model.generateContent({ contents });
+      const result = await model.generateContent({
+        contents,
+        generationConfig: {
+          stopSequences: ["Human:", "Assistant:"],
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+        ]
+      });
 
-      if (!result || !result.response) {
-        console.error('No response object from Gemini');
-        return res.status(500).json({ error: 'Empty response from AI' });
-      }
-
-      const responseText = result.response.text();
-      console.log('Generated response:', responseText);
-      
-      if (!responseText || responseText.trim().length === 0) {
+      if (!result?.response) {
         throw new Error('Empty response from AI');
       }
 
-      return res.json({ response: responseText.trim() });
+      const responseText = result.response.text()?.trim();
+      if (!responseText) {
+        throw new Error('Empty response text');
+      }
 
-    } catch (generationError) {
-      console.error('AI generation error:', generationError);
-      const msg = (generationError && generationError.message) || '';
-      const isSafetyEnumError = msg.includes('GenerateContentRequest.safety_settings');
-      if (isSafetyEnumError || (generationError.status === 400)) {
+      return res.json({ response: responseText });
+
+    } catch (error) {
+      console.error('AI generation error:', error);
+      const msg = error?.message || '';
+      const isSafetyError = msg.includes('safety_settings') || msg.includes('safety filters');
+      
+      if (isSafetyError || error.status === 400) {
         return res.json({
-          response: 'I can help only with PulseAppoint usage, like booking or managing appointments. What would you like to do in the app?'
+          response: 'I can only help with PulseAppoint features like booking appointments or finding doctors. What would you like to do?'
         });
       }
+
       return res.json({
-        response: 'Sorry, I could not process that. I can help with booking, finding doctors, or managing appointments in PulseAppoint.'
+        response: 'I encountered an error. I can help with booking appointments, finding doctors, or managing your existing appointments.'
       });
     }
     // Show user's appointments
@@ -497,24 +616,32 @@ router.post('/', optionalAuth, async (req, res) => {
         });
       }
       try {
-        const now = new Date();
-        const appointments = await Appointment.find({ patientId: req.user._id })
-          .populate('doctorId', 'specialization consultationFee')
-          .sort({ appointmentDate: 1, appointmentTime: 1 })
-          .limit(5);
+        const appointments = await Appointment.find({ 
+          patientId: req.user._id,
+          status: { $in: ['confirmed', 'pending', 'rescheduled'] }
+        })
+        .populate('doctorId')
+        .populate({ 
+          path: 'doctorId', 
+          populate: { path: 'userId', select: 'firstName lastName' }
+        })
+        .sort({ appointmentDate: 1, appointmentTime: 1 })
+        .limit(5);
 
         if (!appointments || appointments.length === 0) {
-          return res.json({ response: 'You have no appointments yet. Would you like help booking one?' });
+          return res.json({ response: 'You have no active appointments. Would you like help booking one?' });
         }
 
         const lines = appointments.map(a => {
-          const date = new Date(a.appointmentDate).toLocaleDateString();
+          const date = formatHumanDate(new Date(a.appointmentDate));
           const time = a.appointmentTime;
+          const doctor = a.doctorId?.userId ? `Dr. ${a.doctorId.userId.firstName} ${a.doctorId.userId.lastName}` : 'Unknown Doctor';
           const spec = a.doctorId?.specialization ? ` • ${a.doctorId.specialization}` : '';
-          const status = a.status;
-          return `- ${date} ${time}${spec} • ${status}`;
+          const status = a.status.charAt(0).toUpperCase() + a.status.slice(1);
+          return `- ${doctor} on ${date} at ${time}${spec} • ${status}`;
         });
-        const summary = `You have ${appointments.length} recent appointments:\n${lines.join('\n')}\n\nFor full details or to cancel/reschedule, open Appointments in the app.`;
+
+        const summary = `Your upcoming appointments:\n${lines.join('\n')}\n\nFor full details or to manage appointments, open Appointments in the app.`;
         return res.json({ response: summary });
       } catch (e) {
         console.error('Chat appointments fetch error:', e);
@@ -530,5 +657,97 @@ router.post('/', optionalAuth, async (req, res) => {
     });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 module.exports = router;
