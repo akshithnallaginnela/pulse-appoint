@@ -264,6 +264,15 @@ router.put('/:id/cancel', verifyToken, validateObjectId('id'), async (req, res) 
       return res.status(400).json({ message: 'Cannot cancel completed appointment' });
     }
 
+    // Check if the appointment was booked within 12 hours
+    const now = new Date();
+    const hoursSinceBooking = (now - appointment.createdAt) / (1000 * 60 * 60);
+    if (hoursSinceBooking < 12) {
+      return res.status(400).json({ 
+        message: 'Appointments cannot be cancelled within 12 hours of booking. Please wait until 12 hours have passed since the booking time.'
+      });
+    }
+
     // Calculate refund amount
     const refundAmount = appointment.calculateRefund();
 

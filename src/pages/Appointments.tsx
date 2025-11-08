@@ -4,6 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, MapPin, User } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAppointments } from "@/contexts/AppointmentsContext";
 import React, { useEffect } from "react";
 
@@ -92,24 +103,78 @@ const Appointments = () => {
                       >
                         Reschedule
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={async () => {
-                          setActionLoading(true);
-                          try {
-                            await cancelAppointment(appointment._id);
-                            await fetchAppointments();
-                          } catch (err) {
-                            // Optionally show error
-                          } finally {
-                            setActionLoading(false);
-                          }
-                        }}
-                        disabled={actionLoading}
-                      >
-                        Cancel
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              // Check if appointment was booked within 12 hours
+                              const bookingTime = new Date(appointment.createdAt);
+                              const now = new Date();
+                              const hoursSinceBooking = (now.getTime() - bookingTime.getTime()) / (1000 * 60 * 60);
+                              if (hoursSinceBooking < 12) {
+                                // Show warning and prevent cancellation
+                                return;
+                              }
+                            }}
+                            disabled={actionLoading}
+                          >
+                            Cancel
+                          </Button>
+                        </AlertDialogTrigger>
+                        {(() => {
+                          const bookingTime = new Date(appointment.createdAt);
+                          const now = new Date();
+                          const hoursSinceBooking = (now.getTime() - bookingTime.getTime()) / (1000 * 60 * 60);
+                          const canCancel = hoursSinceBooking >= 12;
+
+                          return canCancel ? (
+                            <>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Cancel Appointment</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to cancel this appointment? Any applicable refund will be processed according to our cancellation policy.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>No, keep appointment</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={async () => {
+                                      setActionLoading(true);
+                                      try {
+                                        await cancelAppointment(appointment._id);
+                                        await fetchAppointments();
+                                      } catch (err) {
+                                        // Optionally show error
+                                      } finally {
+                                        setActionLoading(false);
+                                      }
+                                    }}
+                                  >
+                                    Yes, cancel appointment
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </>
+                          ) : (
+                            <>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Cannot Cancel Appointment</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Appointments cannot be cancelled within 12 hours of booking. Please wait until {new Date(bookingTime.getTime() + 12 * 60 * 60 * 1000).toLocaleString()} before attempting to cancel.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogAction>I understand</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </>
+                          );
+                        })()}
+                      </AlertDialog>
                     </div>
                   )}
       {/* Reschedule Modal */}
