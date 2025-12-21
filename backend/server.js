@@ -32,8 +32,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/doctor-appointment', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
   socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
   family: 4 // Use IPv4, skip trying IPv6
@@ -51,7 +49,7 @@ app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
-app.use('/api/chat', require('./routes/chat'));
+app.use('/api/chatbot', require('./routes/chatbot'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

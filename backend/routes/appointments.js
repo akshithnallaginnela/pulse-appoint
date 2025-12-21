@@ -52,7 +52,7 @@ router.post('/', verifyToken, requirePatient, validateAppointmentBooking, async 
     const appointmentDateTime = new Date(appointmentDate);
     // Use 'long' for weekday and convert to lowercase
     const dayName = appointmentDateTime.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    
+
     if (!doctor.isAvailableAt(dayName, appointmentTime)) {
       return res.status(400).json({ message: 'Doctor is not available at the requested time' });
     }
@@ -180,7 +180,7 @@ router.get('/:id', verifyToken, validateObjectId('id'), async (req, res) => {
     }
 
     // Check access permissions
-    const hasAccess = 
+    const hasAccess =
       req.user.role === 'admin' ||
       appointment.patientId._id.toString() === req.user._id.toString() ||
       (req.user.role === 'doctor' && appointment.doctorId._id.toString() === req.doctor?._id.toString());
@@ -268,7 +268,7 @@ router.put('/:id/cancel', verifyToken, validateObjectId('id'), async (req, res) 
     const now = new Date();
     const hoursSinceBooking = (now - appointment.createdAt) / (1000 * 60 * 60);
     if (hoursSinceBooking < 12) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Appointments cannot be cancelled within 12 hours of booking. Please wait until 12 hours have passed since the booking time.'
       });
     }
@@ -328,8 +328,8 @@ router.put('/:id/reschedule', verifyToken, validateObjectId('id'), async (req, r
     }
 
     if (!appointment.canBeRescheduled()) {
-      return res.status(400).json({ 
-        message: 'Appointment cannot be rescheduled. Must be rescheduled at least 2 hours before the appointment time.' 
+      return res.status(400).json({
+        message: 'Appointment cannot be rescheduled. Must be rescheduled at least 2 hours before the appointment time.'
       });
     }
 
@@ -337,7 +337,7 @@ router.put('/:id/reschedule', verifyToken, validateObjectId('id'), async (req, r
     const doctor = await Doctor.findById(appointment.doctorId);
     const newAppointmentDate = new Date(newDate);
     const dayName = newAppointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
-    
+
     if (!doctor.isAvailableAt(dayName, newTime)) {
       return res.status(400).json({ message: 'Doctor is not available at the requested time' });
     }
@@ -359,7 +359,7 @@ router.put('/:id/reschedule', verifyToken, validateObjectId('id'), async (req, r
     appointment.appointmentDate = newAppointmentDate;
     appointment.appointmentTime = newTime;
     appointment.status = 'rescheduled';
-    
+
     if (reason) {
       appointment.patientNotes = reason;
     }
@@ -423,6 +423,57 @@ router.put('/:id/complete', verifyToken, requireDoctor, validateObjectId('id'), 
   }
 });
 
+// @route   PUT /api/appointments/:id/status
+// @desc    Update appointment status
+// @access  Private (Doctor)
+router.put('/:id/status', verifyToken, requireDoctor, validateObjectId('id'), async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+
+    if (!status || !['confirmed', 'completed', 'cancelled', 'no-show'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be one of: confirmed, completed, cancelled, no-show' });
+    }
+
+    const appointment = await Appointment.findById(req.params.id);
+
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    // Check if doctor owns this appointment
+    if (appointment.doctorId.toString() !== req.doctor._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Update appointment
+    appointment.status = status;
+    if (notes) {
+      appointment.doctorNotes = notes;
+    }
+
+    // If cancelling, add cancellation details
+    if (status === 'cancelled') {
+      appointment.cancellation = {
+        cancelledBy: 'doctor',
+        cancelledAt: new Date(),
+        reason: notes || 'Cancelled by doctor'
+      };
+    }
+
+    await appointment.save();
+
+    await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
+
+    res.json({
+      message: `Appointment ${status} successfully`,
+      appointment
+    });
+  } catch (error) {
+    console.error('Update appointment status error:', error);
+    res.status(500).json({ message: 'Server error while updating appointment status' });
+  }
+});
+
 // @route   GET /api/appointments/upcoming/me
 // @desc    Get upcoming appointments for current user
 // @access  Private
@@ -469,7 +520,7 @@ router.get('/today/me', verifyToken, async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    let filter = { 
+    let filter = {
       appointmentDate: { $gte: today, $lt: tomorrow },
       status: { $in: ['confirmed', 'pending'] }
     };
