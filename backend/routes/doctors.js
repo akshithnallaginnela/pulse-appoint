@@ -19,7 +19,7 @@ router.get('/', validatePagination, validateSearch, async (req, res) => {
 
     // Build filter object
     const filter = { isActive: true, isVerified: true };
-    
+
     if (specialization && specialization !== 'all') {
       filter.specialization = specialization;
     }
@@ -77,7 +77,7 @@ router.get('/', validatePagination, validateSearch, async (req, res) => {
 router.get('/specializations', async (req, res) => {
   try {
     const specializations = await Doctor.distinct('specialization', { isActive: true, isVerified: true });
-    
+
     res.json({
       message: 'Specializations retrieved successfully',
       specializations
@@ -120,7 +120,7 @@ router.get('/:id', validateObjectId('id'), async (req, res) => {
 router.get('/:id/availability', validateObjectId('id'), async (req, res) => {
   try {
     const { date } = req.query;
-    
+
     if (!date) {
       return res.status(400).json({ message: 'Date is required' });
     }
@@ -132,10 +132,10 @@ router.get('/:id/availability', validateObjectId('id'), async (req, res) => {
 
     const appointmentDate = new Date(date);
     const dayName = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
-    
+
     // Get available time slots
     const availableSlots = doctor.getAvailableSlots(dayName, date);
-    
+
     // Get booked appointments for this date
     const bookedAppointments = await Appointment.find({
       doctorId: doctor._id,
@@ -144,7 +144,7 @@ router.get('/:id/availability', validateObjectId('id'), async (req, res) => {
     }).select('appointmentTime');
 
     const bookedTimes = bookedAppointments.map(apt => apt.appointmentTime);
-    
+
     // Filter out booked slots
     const freeSlots = availableSlots.filter(slot => !bookedTimes.includes(slot));
 
@@ -245,7 +245,7 @@ router.put('/profile/me', verifyToken, requireDoctor, validateDoctorProfile, asy
     } = req.body;
 
     const updateData = {};
-    
+
     if (specialization) updateData.specialization = specialization;
     if (experience) updateData.experience = experience;
     if (education) updateData.education = education;
@@ -263,7 +263,7 @@ router.put('/profile/me', verifyToken, requireDoctor, validateDoctorProfile, asy
     // Mark profile as completed if all required fields are filled
     const requiredFields = ['specialization', 'experience', 'consultationFee', 'bio'];
     const hasAllRequiredFields = requiredFields.every(field => updateData[field] || req.doctor[field]);
-    
+
     if (hasAllRequiredFields) {
       updateData.profileCompleted = true;
     }
@@ -295,11 +295,11 @@ router.get('/appointments/me', verifyToken, requireDoctor, validatePagination, a
     const { status, date } = req.query;
 
     const filter = { doctorId: req.doctor._id };
-    
+
     if (status) {
       filter.status = status;
     }
-    
+
     if (date) {
       const startDate = new Date(date);
       const endDate = new Date(date);
@@ -415,6 +415,74 @@ router.put('/appointments/:id/diagnosis', verifyToken, requireDoctor, validateOb
   } catch (error) {
     console.error('Update diagnosis error:', error);
     res.status(500).json({ message: 'Server error while updating diagnosis' });
+  }
+});
+
+// @route   GET /api/doctors/appointments/today
+// @desc    Get doctor's appointments for today
+// @access  Private (Doctor)
+router.get('/appointments/today', verifyToken, requireDoctor, async (req, res) => {
+  try {
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor profile not found' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const appointments = await Appointment.find({
+      doctorId: doctor._id,
+      appointmentDate: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    })
+      .populate('patientId', 'firstName lastName email phone')
+      .sort({ appointmentTime: 1 });
+
+    res.json({
+      message: 'Today\'s appointments retrieved successfully',
+      appointments
+    });
+  } catch (error) {
+    console.error('Get today appointments error:', error);
+    res.status(500).json({ message: 'Server error while fetching today\'s appointments' });
+  }
+});
+
+// @route   GET /api/doctors/appointments
+// @desc    Get all doctor's appointments
+// @access  Private (Doctor)
+router.get('/appointments', verifyToken, requireDoctor, async (req, res) => {
+  try {
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor profile not found' });
+    }
+
+    const { status } = req.query;
+    const filter = { doctorId: doctor._id };
+
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+
+    const appointments = await Appointment.find(filter)
+      .populate('patientId', 'firstName lastName email phone')
+      .sort({ appointmentDate: -1, appointmentTime: -1 });
+
+    res.json({
+      message: 'Appointments retrieved successfully',
+      appointments
+    });
+  } catch (error) {
+    console.error('Get appointments error:', error);
+    res.status(500).json({ message: 'Server error while fetching appointments' });
   }
 });
 
