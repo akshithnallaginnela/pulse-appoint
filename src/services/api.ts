@@ -12,7 +12,7 @@ const getAuthToken = () => {
 // Helper function to make API requests
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = getAuthToken();
-  
+
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -28,16 +28,16 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
 
   try {
     const response = await fetch(fullUrl, config);
-    
+
     console.log('Response status:', response.status);
     console.log('Response headers:', response.headers);
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('API error response:', errorData);
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     console.log('API response data:', data);
     return data;
@@ -218,7 +218,7 @@ export const doctorsAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/doctors?${queryParams.toString()}`);
   },
 
@@ -268,7 +268,7 @@ export const doctorsAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/doctors/appointments/me?${queryParams.toString()}`);
   },
 
@@ -329,7 +329,7 @@ export const appointmentsAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/appointments?${queryParams.toString()}`);
   },
 
@@ -443,7 +443,7 @@ export const adminAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/admin/users?${queryParams.toString()}`);
   },
 
@@ -475,7 +475,7 @@ export const adminAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/admin/doctors?${queryParams.toString()}`);
   },
 
@@ -502,7 +502,7 @@ export const adminAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/admin/appointments?${queryParams.toString()}`);
   },
 
@@ -520,7 +520,7 @@ export const adminAPI = {
     queryParams.append('period', period);
     if (startDate) queryParams.append('startDate', startDate);
     if (endDate) queryParams.append('endDate', endDate);
-    
+
     return apiRequest(`/admin/reports/revenue?${queryParams.toString()}`);
   },
 
@@ -530,7 +530,7 @@ export const adminAPI = {
     queryParams.append('period', period);
     if (startDate) queryParams.append('startDate', startDate);
     if (endDate) queryParams.append('endDate', endDate);
-    
+
     return apiRequest(`/admin/reports/appointments?${queryParams.toString()}`);
   },
 };
@@ -566,9 +566,8 @@ export const chatbotAPI = {
 
   // End session
   endSession: async (sessionId: string) => {
-    return apiRequest('/chatbot/session/end', {
-      method: 'POST',
-      body: JSON.stringify({ sessionId }),
+    return apiRequest(`/chatbot/session/${sessionId}`, {
+      method: 'DELETE',
     });
   },
 };

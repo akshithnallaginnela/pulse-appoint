@@ -36,11 +36,11 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/doctor-ap
   socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
   family: 4 // Use IPv4, skip trying IPv6
 })
-.then(() => console.log('MongoDB connected successfully'))
-.catch(err => {
-  console.error('MongoDB connection error:', err);
-  console.log('Please make sure your IP is whitelisted in MongoDB Atlas Network Access settings.');
-});
+  .then(() => console.log('MongoDB connected successfully'))
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    console.log('Please make sure your IP is whitelisted in MongoDB Atlas Network Access settings.');
+  });
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -51,10 +51,11 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/chatbot', require('./routes/chatbot'));
 
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     message: 'Server is running',
     timestamp: new Date().toISOString()
   });
@@ -63,7 +64,7 @@ app.get('/api/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
+  res.status(500).json({
     message: 'Something went wrong!',
     error: process.env.NODE_ENV === 'development' ? err.message : {}
   });
