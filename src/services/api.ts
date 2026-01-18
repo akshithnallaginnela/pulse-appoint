@@ -542,36 +542,6 @@ export const healthAPI = {
   },
 };
 
-// Chatbot API
-export const chatbotAPI = {
-  // Send message to chatbot
-  sendMessage: async (message: string, sessionId?: string) => {
-    return apiRequest('/chatbot/message', {
-      method: 'POST',
-      body: JSON.stringify({ message, sessionId }),
-    });
-  },
-
-  // Get conversation history
-  getHistory: async (sessionId: string) => {
-    return apiRequest(`/chatbot/session/${sessionId}`);
-  },
-
-  // Start new session
-  newSession: async () => {
-    return apiRequest('/chatbot/session/new', {
-      method: 'POST',
-    });
-  },
-
-  // End session
-  endSession: async (sessionId: string) => {
-    return apiRequest(`/chatbot/session/${sessionId}`, {
-      method: 'DELETE',
-    });
-  },
-};
-
 export default {
   authAPI,
   usersAPI,
@@ -580,5 +550,5 @@ export default {
   paymentsAPI,
   adminAPI,
   healthAPI,
-  chatbotAPI,
 };
+
