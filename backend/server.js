@@ -49,6 +49,7 @@ app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/chatbot', require('./routes/chatbot'));
 
 
 // Health check endpoint
