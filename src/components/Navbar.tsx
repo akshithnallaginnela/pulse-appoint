@@ -85,7 +85,13 @@ const Navbar = () => {
               <Link to="/login">
                 <Button variant="ghost" size="sm">
                   <User className="mr-2 h-4 w-4" />
-                  Login
+                  Patient Login
+                </Button>
+              </Link>
+              <Link to="/doctor-login">
+                <Button variant="ghost" size="sm">
+                  <Stethoscope className="mr-2 h-4 w-4" />
+                  Doctor Login
                 </Button>
               </Link>
               <Link to="/login?signup=true">
