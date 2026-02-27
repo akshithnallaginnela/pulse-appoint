@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Doctor = require('../models/Doctor');
 const Appointment = require('../models/Appointment');
@@ -6,6 +7,99 @@ const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { validateObjectId, validatePagination, validateSearch } = require('../middleware/validation');
 
 const router = express.Router();
+
+// @route   POST /api/admin/create-doctor
+// @desc    Create a new doctor account (admin only)
+// @access  Private (Admin)
+router.post('/create-doctor', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      phone,
+      dateOfBirth,
+      gender,
+      licenseNumber,
+      specialization,
+      experience,
+      consultationFee
+    } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !password || !phone || !dateOfBirth || !gender || !licenseNumber || !specialization) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'A user already exists with this email' });
+    }
+
+    // Check if license number already exists
+    const existingDoctor = await Doctor.findOne({ licenseNumber });
+    if (existingDoctor) {
+      return res.status(400).json({ message: 'A doctor with this license number already exists' });
+    }
+
+    // Create new user with doctor role
+    const user = new User({
+      firstName,
+      lastName,
+      email,
+      password,
+      phone,
+      dateOfBirth,
+      gender,
+      role: 'doctor'
+    });
+
+    await user.save();
+
+    // Create doctor profile (auto-verified since created by admin)
+    const doctor = new Doctor({
+      userId: user._id,
+      licenseNumber,
+      specialization,
+      experience: experience || 0,
+      consultationFee: consultationFee || 500,
+      isVerified: true,
+      isActive: true
+    });
+
+    await doctor.save();
+
+    res.status(201).json({
+      message: 'Doctor account created successfully',
+      doctor: {
+        id: doctor._id,
+        userId: user._id,
+        name: `Dr. ${firstName} ${lastName}`,
+        email,
+        specialization,
+        licenseNumber,
+        isVerified: true
+      }
+    });
+  } catch (error) {
+    console.error('Create doctor error:', error);
+    if (error && error.code === 11000) {
+      const field = error.keyPattern?.email ? 'email' : error.keyPattern?.licenseNumber ? 'license number' : 'field';
+      return res.status(400).json({ message: `A user already exists with this ${field}` });
+    }
+    if (error && error.name === 'ValidationError') {
+      const details = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ message: 'Validation failed', details });
+    }
+    res.status(500).json({ message: 'Server error while creating doctor account' });
+  }
+});
 
 // @route   GET /api/admin/dashboard/stats
 // @desc    Get admin dashboard statistics
