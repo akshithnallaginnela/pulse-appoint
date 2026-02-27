@@ -16,6 +16,9 @@ import NotFound from "./pages/NotFound";
 import About from "./pages/About";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import DoctorAppointments from "./pages/DoctorAppointments";
+import DoctorProfile from "./pages/DoctorProfile";
+import DoctorAvailability from "./pages/DoctorAvailability";
+import Chatbot from "./components/Chatbot";
 
 const queryClient = new QueryClient();
 
@@ -39,9 +42,12 @@ const App = () => (
               {/* Doctor Routes */}
               <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
               <Route path="/doctor/appointments" element={<DoctorAppointments />} />
+              <Route path="/doctor/profile" element={<DoctorProfile />} />
+              <Route path="/doctor/availability" element={<DoctorAvailability />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <Chatbot />
           </BrowserRouter>
         </AppointmentsProvider>
       </AuthProvider>

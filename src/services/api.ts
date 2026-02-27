@@ -535,6 +535,24 @@ export const adminAPI = {
   },
 };
 
+// Chatbot API
+export const chatbotAPI = {
+  // Create a new chat session
+  createSession: async () => {
+    return apiRequest('/chatbot/session', {
+      method: 'POST',
+    });
+  },
+
+  // Send a message to the chatbot
+  sendMessage: async (message: string, sessionId: string) => {
+    return apiRequest('/chatbot/message', {
+      method: 'POST',
+      body: JSON.stringify({ message, sessionId }),
+    });
+  },
+};
+
 // Health check API
 export const healthAPI = {
   check: async () => {
@@ -549,6 +567,7 @@ export default {
   appointmentsAPI,
   paymentsAPI,
   adminAPI,
+  chatbotAPI,
   healthAPI,
 };
 
