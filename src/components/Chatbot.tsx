@@ -11,10 +11,12 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  "Find a cardiologist",
-  "Book an appointment",
+  "How to book an appointment?",
+  "How to cancel or reschedule?",
+  "Find a doctor",
+  "Payment & refund policy",
   "Check doctor availability",
-  "View my appointments",
+  "I need urgent help",
 ];
 
 const Chatbot = () => {
@@ -65,7 +67,7 @@ const Chatbot = () => {
         id: "welcome",
         role: "assistant",
         content:
-          "Hello! 👋 I'm your PulseAppoint assistant. I can help you:\n\n• **Find doctors** by specialization\n• **Book appointments**\n• **Check availability**\n• **Answer questions** about our platform\n\nHow can I help you today?",
+          "Hello! 👋 I'm your PulseAppoint support assistant. I can help you with:\n\n• **Book, cancel, or reschedule** appointments\n• **Find doctors** by specialization\n• **Payment & refund** queries\n• **Doctor availability** and details\n• **Account & platform** help\n• **General health** questions\n\nHow can I help you today?",
         timestamp: new Date(),
       };
       setMessages([welcomeMsg]);

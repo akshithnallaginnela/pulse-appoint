@@ -9,7 +9,6 @@ class GeminiService {
       return;
     }
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-flash (gemini-pro is deprecated and no longer available)
     this.model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   }
 
@@ -22,17 +21,55 @@ class GeminiService {
     }
 
     try {
-      const systemPrompt = `You are a helpful medical appointment assistant for PulseAppoint, a doctor appointment booking platform.
-Your role is to help patients:
-- Find doctors by specialization
-- Book appointments
-- Check availability
-- Answer general questions about the platform
+      const systemPrompt = `You are a friendly, knowledgeable customer support assistant for **PulseAppoint**, a doctor appointment booking platform.
 
-Keep responses concise, friendly, and helpful. Do not provide medical advice or diagnoses.
-If you don't know something, suggest the user contact support.
+YOUR CAPABILITIES — you must help patients with ALL of the following:
 
-${context ? `Context: ${context}` : ''}
+1. **Booking Appointments**
+   - Explain step-by-step how to book: go to Doctors page → select a doctor → choose date & time → confirm & pay.
+   - Guide users to the /doctors page to browse or search by specialization.
+
+2. **Cancelling Appointments**
+   - Explain: go to Appointments page → find the appointment → click Cancel.
+   - Important rule: appointments cannot be cancelled within 12 hours of booking. They must wait 12 hours after booking time.
+   - Refund policy: if cancelled more than 24 hours before appointment → 100% refund; within 24 hours → 50% refund; less than 2 hours → no refund.
+
+3. **Rescheduling Appointments**
+   - Explain: visit the Appointments page and use the reschedule option.
+   - Must be done at least 2 hours before the original appointment time.
+
+4. **Doctor Information**
+   - Help users find doctors by specialization (Cardiologist, Pediatrician, Dermatologist, etc.).
+   - Doctor profiles include: specialization, experience, ratings, consultation fee, availability, bio, languages, and services.
+
+5. **Payment & Billing**
+   - Payments are processed through Razorpay (supports UPI, cards, net banking).
+   - Consultation fees vary by doctor and are shown on their profile.
+   - Refunds are processed to original payment method within 5-7 business days.
+
+6. **Account & Profile**
+   - Users can create an account, log in, and manage their profile.
+   - Appointment history is visible on the Appointments page.
+
+7. **Platform Navigation**
+   - Home page (/): overview and featured doctors.
+   - Doctors page (/doctors): browse and search all doctors.
+   - Appointments page (/appointments): view all your appointments.
+   - About page (/about): learn about PulseAppoint.
+
+8. **General Medical Queries**
+   - Provide general health awareness information.
+   - ALWAYS add a disclaimer: "This is for informational purposes only. Please consult a doctor for medical advice."
+   - Never diagnose conditions or prescribe medications.
+
+RESPONSE GUIDELINES:
+- Be concise but thorough. Use bullet points and bold text for clarity.
+- Be empathetic and professional.
+- If a question is outside your scope, politely redirect to contacting support.
+- Always suggest the next logical step for the user.
+- Use emojis sparingly for friendliness.
+
+${context ? `Recent conversation context:\n${context}\n` : ''}
 
 User message: ${prompt}`;
 
@@ -54,16 +91,18 @@ User message: ${prompt}`;
     }
 
     try {
-      const prompt = `Analyze the following user message and extract the intent and entities for a doctor appointment booking system.
+      const prompt = `Analyze the following user message for a doctor appointment booking platform's customer support chatbot.
 
 Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
 {
-  "intent": "one of: book_appointment, check_availability, find_doctor, cancel_appointment, reschedule_appointment, view_appointments, greeting, farewell, thanks, other",
+  "intent": "one of: book_appointment, check_availability, find_doctor, cancel_appointment, reschedule_appointment, view_appointments, doctor_details, payment_info, refund_query, how_to_book, how_to_cancel, how_to_reschedule, account_help, platform_help, medical_query, greeting, farewell, thanks, complaint, urgent_help, other",
   "entities": {
     "doctorName": "extracted doctor name or null",
     "specialization": "extracted specialization or null",
     "date": "extracted date in YYYY-MM-DD format or null",
-    "time": "extracted time in HH:MM format or null"
+    "time": "extracted time in HH:MM format or null",
+    "appointmentId": "any reference to appointment number/id or null",
+    "topic": "the main topic of the query or null"
   },
   "confidence": 0.0 to 1.0
 }
@@ -94,7 +133,9 @@ User message: "${message}"`;
       'general physician', 'neurologist', 'gynecologist', 'psychiatrist',
       'oncologist', 'radiologist', 'ophthalmologist', 'ent specialist',
       'urologist', 'endocrinologist', 'gastroenterologist', 'pulmonologist',
-      'rheumatologist', 'nephrologist', 'hematologist'
+      'rheumatologist', 'nephrologist', 'hematologist', 'family medicine',
+      'internal medicine', 'emergency medicine', 'anesthesiologist',
+      'infectious disease'
     ];
 
     let intent = 'other';
@@ -102,7 +143,9 @@ User message: "${message}"`;
       doctorName: null,
       specialization: null,
       date: null,
-      time: null
+      time: null,
+      appointmentId: null,
+      topic: null
     };
 
     // Detect specialization
@@ -113,25 +156,47 @@ User message: "${message}"`;
       }
     }
 
-    // Detect intent
-    if (/\b(hi|hello|hey|good morning|good evening)\b/.test(lower)) {
+    // Detect intent — ordered from most specific to least
+    if (/\b(hi|hello|hey|good morning|good evening|good afternoon)\b/.test(lower)) {
       intent = 'greeting';
     } else if (/\b(bye|goodbye|see you|take care)\b/.test(lower)) {
       intent = 'farewell';
-    } else if (/\b(thanks|thank you|appreciate)\b/.test(lower)) {
+    } else if (/\b(thanks|thank you|appreciate|thx)\b/.test(lower)) {
       intent = 'thanks';
+    } else if (/how.*(book|schedule|make.*appointment)|steps.*book|process.*book|guide.*book/.test(lower)) {
+      intent = 'how_to_book';
+    } else if (/how.*(cancel|cancellation)|steps.*cancel|process.*cancel|guide.*cancel/.test(lower)) {
+      intent = 'how_to_cancel';
+    } else if (/how.*(reschedule|change.*appointment)|steps.*reschedule/.test(lower)) {
+      intent = 'how_to_reschedule';
+    } else if (/\b(refund|money back|get.*refund|refund.*policy|refund.*status)\b/.test(lower)) {
+      intent = 'refund_query';
+    } else if (/\b(payment|pay|billing|charge|fee|cost|price|how much)\b/.test(lower)) {
+      intent = 'payment_info';
     } else if (/\b(book|schedule|appointment|make an appointment)\b/.test(lower)) {
       intent = 'book_appointment';
-    } else if (/\b(available|availability|free|open slot|check)\b/.test(lower)) {
+    } else if (/\b(available|availability|free|open slot|when.*available)\b/.test(lower)) {
       intent = 'check_availability';
-    } else if (/\b(find|search|looking for|doctor|specialist)\b/.test(lower) || entities.specialization) {
-      intent = 'find_doctor';
     } else if (/\b(cancel)\b/.test(lower)) {
       intent = 'cancel_appointment';
-    } else if (/\b(reschedule|change|move)\b/.test(lower)) {
+    } else if (/\b(reschedule|change.*time|move.*appointment)\b/.test(lower)) {
       intent = 'reschedule_appointment';
-    } else if (/\b(my appointment|view|upcoming|list)\b/.test(lower)) {
+    } else if (/\b(my appointment|view|upcoming|list.*appointment|appointment.*history)\b/.test(lower)) {
       intent = 'view_appointments';
+    } else if (/doctor.*detail|about.*doctor|doctor.*info|profile|qualifi|experience|rating|review/.test(lower)) {
+      intent = 'doctor_details';
+    } else if (/\b(find|search|looking for|doctor|specialist)\b/.test(lower) || entities.specialization) {
+      intent = 'find_doctor';
+    } else if (/\b(account|profile|login|sign.*up|register|password|forgot)\b/.test(lower)) {
+      intent = 'account_help';
+    } else if (/how.*work|what.*pulseappoint|about.*platform|feature|help|support|navigate|where|page/.test(lower)) {
+      intent = 'platform_help';
+    } else if (/\b(health|symptom|disease|condition|medicine|treatment|diagnos|sick|pain|fever|cold|cough|headache)\b/.test(lower)) {
+      intent = 'medical_query';
+    } else if (/\b(complaint|issue|problem|not working|bug|error|wrong)\b/.test(lower)) {
+      intent = 'complaint';
+    } else if (/\b(urgent|emergency|immediately|asap)\b/.test(lower)) {
+      intent = 'urgent_help';
     }
 
     // If we found a specialization but intent is still 'other', default to find_doctor
