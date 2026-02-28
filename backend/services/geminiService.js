@@ -207,6 +207,8 @@ User message: "${message}"`;
       intent = 'refund_query';
     } else if (/\b(payment|pay|billing|charge|fee|cost|price|how much)\b/.test(lower)) {
       intent = 'payment_info';
+    } else if (/\b(available|availability|free|open slot|when.*available)\b/.test(lower)) {
+      intent = 'check_availability';
     } else if (/\b(cancell?ation|cancel)\b/.test(lower)) {
       intent = 'cancel_appointment';
     } else if (/\b(reschedule|change.*time|move.*appointment)\b/.test(lower)) {
