@@ -153,21 +153,20 @@ class ChatbotService {
   // ─── FIND DOCTOR ─────────────────────────────────
   async _handleFindDoctor(entities, session) {
     const specialization = entities.specialization || session.context.specialization;
+    const doctorName = entities.doctorName || session.context.doctorName;
 
     try {
-      const query = { isActive: true, isVerified: true };
-      if (specialization) {
-        query.specialization = new RegExp(specialization, 'i');
-      }
-
-      const doctors = await Doctor.find(query)
-        .populate('userId', 'firstName lastName')
-        .sort({ 'rating.average': -1 })
-        .limit(5);
+      const doctors = await this._findDoctors({
+        doctorName,
+        specialization,
+        limit: 5,
+        sort: { 'rating.average': -1 }
+      });
 
       if (doctors.length === 0) {
-        return specialization
-          ? `I couldn't find any **${specialization}** doctors at the moment. Would you like to try a different specialization?\n\nAvailable specializations include: Cardiologist, Pediatrician, Dermatologist, Neurologist, General Physician, and more.`
+        const searchTerm = doctorName ? `Dr. ${doctorName}` : specialization;
+        return searchTerm
+          ? `I couldn't find any doctors matching **${searchTerm}**. Would you like to try a different name or specialization?\n\nAvailable specializations include: Cardiologist, Pediatrician, Dermatologist, Neurologist, General Physician, and more.`
           : "I couldn't find any available doctors right now. Please try again later or visit the **Doctors** page to browse all options.";
       }
 
@@ -216,6 +215,47 @@ class ChatbotService {
     return `Here's a summary of your booking:\n\n• **Specialist:** ${spec || 'Selected doctor'}\n• **Date:** ${date}\n• **Time:** ${time}\n\nTo complete your booking, please visit the **Doctors** page, select your preferred doctor, and finalize the appointment with payment.\n\n💡 **Tip:** You can pay via UPI, credit/debit card, or net banking.\n\nWould you like help with anything else?`;
   }
 
+  // ─── Helper: find doctors by name and/or specialization ─────
+  async _findDoctors({ doctorName, specialization, limit = 5, sort = null } = {}) {
+    const query = { isActive: true, isVerified: true };
+    if (specialization) {
+      query.specialization = new RegExp(specialization, 'i');
+    }
+
+    // If searching by doctor name, first find matching user IDs
+    if (doctorName) {
+      const User = require('../models/User');
+      const nameParts = doctorName.trim().split(/\s+/);
+      let userQuery;
+      if (nameParts.length === 1) {
+        // Single name — match against either first or last name
+        const nameRegex = new RegExp(nameParts[0], 'i');
+        userQuery = { $or: [{ firstName: nameRegex }, { lastName: nameRegex }] };
+      } else {
+        // Multiple parts — match firstName+lastName combination
+        const firstRegex = new RegExp(nameParts[0], 'i');
+        const lastRegex = new RegExp(nameParts.slice(1).join(' '), 'i');
+        userQuery = {
+          $or: [
+            { firstName: firstRegex, lastName: lastRegex },
+            { firstName: new RegExp(doctorName, 'i') },
+            { lastName: new RegExp(doctorName, 'i') }
+          ]
+        };
+      }
+      const matchingUsers = await User.find(userQuery).select('_id');
+      if (matchingUsers.length === 0) {
+        return [];
+      }
+      query.userId = { $in: matchingUsers.map(u => u._id) };
+    }
+
+    let q = Doctor.find(query).populate('userId', 'firstName lastName');
+    if (sort) q = q.sort(sort);
+    if (limit) q = q.limit(limit);
+    return q;
+  }
+
   // ─── CHECK AVAILABILITY ──────────────────────────
   async _handleCheckAvailability(entities, session) {
     const specialization = entities.specialization || session.context.specialization;
@@ -226,17 +266,11 @@ class ChatbotService {
     }
 
     try {
-      const query = { isActive: true, isVerified: true };
-      if (specialization) {
-        query.specialization = new RegExp(specialization, 'i');
-      }
-
-      const doctors = await Doctor.find(query)
-        .populate('userId', 'firstName lastName')
-        .limit(3);
+      const doctors = await this._findDoctors({ doctorName, specialization, limit: 3 });
 
       if (doctors.length === 0) {
-        return `I couldn't find any ${specialization || ''} doctors. Would you like to try a different specialization?`;
+        const searchTerm = doctorName ? `Dr. ${doctorName}` : specialization;
+        return `I couldn't find any doctors matching "${searchTerm}". Please check the spelling or try a different name/specialization.\n\nYou can also visit the **Doctors** page to browse all available doctors.`;
       }
 
       const today = new Date();
@@ -322,21 +356,19 @@ class ChatbotService {
     }
 
     try {
-      const query = { isActive: true, isVerified: true };
-      if (specialization) {
-        query.specialization = new RegExp(specialization, 'i');
-      }
-
-      const doctors = await Doctor.find(query)
-        .populate('userId', 'firstName lastName')
-        .sort({ 'rating.average': -1 })
-        .limit(3);
+      const doctors = await this._findDoctors({
+        doctorName,
+        specialization,
+        limit: 3,
+        sort: { 'rating.average': -1 }
+      });
 
       if (doctors.length === 0) {
-        return `No ${specialization || ''} doctors found. Try a different specialization or visit the **Doctors** page.`;
+        const searchTerm = doctorName ? `Dr. ${doctorName}` : specialization;
+        return `No doctors matching "${searchTerm || ''}" found. Try a different name or specialization, or visit the **Doctors** page.`;
       }
 
-      let response = `Here are details for our ${specialization || ''} doctors:\n\n`;
+      let response = `Here are details for our ${doctorName ? `Dr. ${doctorName}` : specialization || ''} doctors:\n\n`;
 
       doctors.forEach((doc, i) => {
         const name = doc.userId ? `Dr. ${doc.userId.firstName} ${doc.userId.lastName}` : 'Doctor';

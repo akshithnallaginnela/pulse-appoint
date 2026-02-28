@@ -156,6 +156,19 @@ User message: "${message}"`;
       }
     }
 
+    // Detect doctor name (e.g., "Dr. Smith", "Dr. harshaa N", "doctor John")
+    const drMatch = message.match(/\bdr\.?\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)/i)
+      || message.match(/\bdoctor\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)/i);
+    if (drMatch) {
+      // Remove trailing words that are common non-name tokens
+      let name = drMatch[1].trim();
+      // Remove trailing noise words like 'available', 'today', 'appointment', etc.
+      name = name.replace(/\b(available|availability|today|tomorrow|appointment|details|info|profile|please|is|the|for|on|at)\b.*$/i, '').trim();
+      if (name.length > 0) {
+        entities.doctorName = name;
+      }
+    }
+
     // Detect intent — ordered from most specific to least
     if (/\b(hi|hello|hey|good morning|good evening|good afternoon)\b/.test(lower)) {
       intent = 'greeting';
