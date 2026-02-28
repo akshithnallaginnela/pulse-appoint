@@ -10,6 +10,7 @@ import { Calendar, Clock, Search, Filter } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/services/api';
 
 interface Appointment {
     _id: string;
@@ -56,7 +57,7 @@ const DoctorAppointments = () => {
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/doctors/appointments`, {
+            const res = await fetch(`${API_BASE_URL}/doctors/appointments`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -96,7 +97,7 @@ const DoctorAppointments = () => {
     const updateAppointmentStatus = async (appointmentId: string, newStatus: string) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/appointments/${appointmentId}/status`, {
+            const res = await fetch(`${API_BASE_URL}/appointments/${appointmentId}/status`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

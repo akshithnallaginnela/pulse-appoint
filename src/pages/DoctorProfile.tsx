@@ -12,6 +12,7 @@ import { User, Stethoscope, GraduationCap, Award, Save, ArrowLeft } from 'lucide
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/services/api';
 
 interface DoctorProfile {
     _id: string;
@@ -77,7 +78,7 @@ const DoctorProfilePage = () => {
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/doctors/profile/me`, {
+            const res = await fetch(`${API_BASE_URL}/doctors/profile/me`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -109,7 +110,7 @@ const DoctorProfilePage = () => {
         try {
             setSaving(true);
             const token = localStorage.getItem('token');
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/doctors/profile/me`, {
+            const res = await fetch(`${API_BASE_URL}/doctors/profile/me`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
