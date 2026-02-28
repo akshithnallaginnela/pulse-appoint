@@ -95,7 +95,7 @@ User message: ${prompt}`;
 
 Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
 {
-  "intent": "one of: book_appointment, check_availability, find_doctor, cancel_appointment, reschedule_appointment, view_appointments, doctor_details, payment_info, refund_query, how_to_book, how_to_cancel, how_to_reschedule, account_help, platform_help, medical_query, greeting, farewell, thanks, complaint, urgent_help, other",
+  "intent": "one of: book_appointment, check_availability, find_doctor, cancel_appointment, reschedule_appointment, view_appointments, doctor_details, symptom_analysis, payment_info, refund_query, how_to_book, how_to_cancel, how_to_reschedule, account_help, platform_help, medical_query, greeting, farewell, thanks, complaint, urgent_help, other",
   "entities": {
     "doctorName": "extracted doctor name or null",
     "specialization": "extracted specialization or null",
@@ -225,8 +225,8 @@ User message: "${message}"`;
       intent = 'account_help';
     } else if (/how.*work|what.*pulseappoint|about.*platform|feature|navigate|where.*page|platform.*(help|support|guide)|how.*use/.test(lower)) {
       intent = 'platform_help';
-    } else if (/\b(health|symptom|disease|condition|medicine|treatment|diagnos|sick|pain|fever|cold|cough|headache)\b/.test(lower)) {
-      intent = 'medical_query';
+    } else if (/\b(health|symptom|disease|condition|medicine|treatment|diagnos|sick|pain|fever|cold|cough|headache|rash|acne|vomit|nausea|dizziness|bleeding|swelling|itching|burning|cramp|ache|sore|infection|allergy|breathing|wheez|fatigue|weakness|numbness|tingling|blurr|stomach|chest|joint|back pain|knee|throat|ear pain|anxiety|depression|insomnia|pimple|hair loss|acidity|constipation|diarrhea)\b/.test(lower)) {
+      intent = 'symptom_analysis';
     } else if (/\b(complaint|issue|problem|not working|bug|error|wrong)\b/.test(lower)) {
       intent = 'complaint';
     } else if (/\b(urgent|emergency|immediately|asap)\b/.test(lower)) {
@@ -248,6 +248,41 @@ User message: "${message}"`;
       entities,
       confidence: 0.6
     };
+  }
+  /**
+   * Analyze symptoms and suggest appropriate specializations
+   */
+  async analyzeSymptoms(message) {
+    if (!this.model) {
+      return null;
+    }
+
+    try {
+      const prompt = `You are a medical triage assistant. A patient describes their symptoms below. Analyze them and suggest appropriate medical specialists.
+
+Return ONLY a valid JSON object (no markdown, no explanation) with this structure:
+{
+  "symptoms": "brief summary of identified symptoms",
+  "specializations": ["Primary Specialist", "Secondary Specialist (if applicable)"],
+  "severity": "mild|moderate|severe",
+  "advice": "one-line general health tip (not a diagnosis or prescription)"
+}
+
+Specializations must be from: General Physician, Cardiologist, Dermatologist, Neurologist, Orthopedic, Pediatrician, Gynecologist, Psychiatrist, Ophthalmologist, ENT Specialist, Gastroenterologist, Pulmonologist, Urologist, Endocrinologist, Dentist, Oncologist, Rheumatologist, Nephrologist.
+
+IMPORTANT: Never diagnose. Never prescribe medication. Only suggest which type of doctor to see.
+
+Patient message: "${message}"`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+      const cleaned = text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim();
+      return JSON.parse(cleaned);
+    } catch (error) {
+      console.error('Error analyzing symptoms:', error);
+      return null;
+    }
   }
 }
 

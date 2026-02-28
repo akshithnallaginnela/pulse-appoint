@@ -15,8 +15,8 @@ const SUGGESTIONS = [
   "View my appointments",
   "Cancel an appointment",
   "Reschedule an appointment",
+  "I have a headache and fever",
   "Find a doctor",
-  "I need urgent help",
 ];
 
 const Chatbot = () => {

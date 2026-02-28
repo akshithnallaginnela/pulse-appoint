@@ -1028,6 +1028,174 @@ class ChatbotService {
     return "Welcome to **PulseAppoint**! Here's a quick guide: 🏥\n\n**What is PulseAppoint?**\nA platform to find trusted doctors and book appointments online.\n\n**Main Pages:**\n• 🏠 **Home** (/) — Platform overview, featured doctors\n• 🩺 **Doctors** (/doctors) — Browse and search all doctors\n• 📅 **Appointments** (/appointments) — View your bookings\n• ℹ️ **About** (/about) — Learn about the platform\n\n**Key Features:**\n• Search doctors by **specialization, rating, or experience**\n• **Real-time availability** checking\n• **Secure online payment** via Razorpay\n• **Appointment management** — book, cancel, reschedule via chat or UI\n• **Doctor reviews and ratings**\n• **24/7 AI support** (that's me! 🤖)\n\nWhat would you like to do?";
   }
 
+  // ─── SYMPTOM ANALYSIS & DOCTOR RECOMMENDATION ────
+  async _handleSymptomAnalysis(message, entities, session) {
+    // Symptom-to-specialization mapping
+    const symptomMap = {
+      // Heart / Cardiovascular
+      'chest pain': 'Cardiologist', 'heart palpitations': 'Cardiologist', 'shortness of breath': 'Cardiologist',
+      'high blood pressure': 'Cardiologist', 'irregular heartbeat': 'Cardiologist', 'chest tightness': 'Cardiologist',
+      // Skin
+      'rash': 'Dermatologist', 'acne': 'Dermatologist', 'skin infection': 'Dermatologist', 'eczema': 'Dermatologist',
+      'itching': 'Dermatologist', 'hair loss': 'Dermatologist', 'psoriasis': 'Dermatologist', 'skin allergy': 'Dermatologist',
+      'pimples': 'Dermatologist', 'dark spots': 'Dermatologist', 'skin rash': 'Dermatologist',
+      // Brain / Nerves
+      'headache': 'Neurologist', 'migraine': 'Neurologist', 'dizziness': 'Neurologist', 'seizure': 'Neurologist',
+      'numbness': 'Neurologist', 'tingling': 'Neurologist', 'memory loss': 'Neurologist', 'tremor': 'Neurologist',
+      // Bones / Joints
+      'joint pain': 'Orthopedic', 'back pain': 'Orthopedic', 'fracture': 'Orthopedic', 'knee pain': 'Orthopedic',
+      'shoulder pain': 'Orthopedic', 'bone pain': 'Orthopedic', 'sprain': 'Orthopedic', 'neck pain': 'Orthopedic',
+      'hip pain': 'Orthopedic', 'muscle pain': 'Orthopedic',
+      // Children
+      'child fever': 'Pediatrician', 'baby not eating': 'Pediatrician', 'child rash': 'Pediatrician',
+      'child cough': 'Pediatrician', 'child vaccination': 'Pediatrician', 'infant health': 'Pediatrician',
+      // Stomach / Digestive
+      'stomach pain': 'Gastroenterologist', 'acidity': 'Gastroenterologist', 'constipation': 'Gastroenterologist',
+      'diarrhea': 'Gastroenterologist', 'bloating': 'Gastroenterologist', 'nausea': 'Gastroenterologist',
+      'vomiting': 'Gastroenterologist', 'indigestion': 'Gastroenterologist', 'abdominal pain': 'Gastroenterologist',
+      'gas': 'Gastroenterologist', 'acid reflux': 'Gastroenterologist',
+      // Eyes
+      'eye pain': 'Ophthalmologist', 'blurry vision': 'Ophthalmologist', 'red eyes': 'Ophthalmologist',
+      'eye infection': 'Ophthalmologist', 'watery eyes': 'Ophthalmologist', 'vision problems': 'Ophthalmologist',
+      // Ear / Nose / Throat
+      'ear pain': 'ENT Specialist', 'sore throat': 'ENT Specialist', 'nasal congestion': 'ENT Specialist',
+      'hearing loss': 'ENT Specialist', 'tonsils': 'ENT Specialist', 'sinusitis': 'ENT Specialist',
+      'nose bleed': 'ENT Specialist', 'snoring': 'ENT Specialist',
+      // Lungs / Respiratory
+      'cough': 'Pulmonologist', 'asthma': 'Pulmonologist', 'wheezing': 'Pulmonologist',
+      'breathing difficulty': 'Pulmonologist', 'chronic cough': 'Pulmonologist',
+      // Mental Health
+      'anxiety': 'Psychiatrist', 'depression': 'Psychiatrist', 'stress': 'Psychiatrist',
+      'insomnia': 'Psychiatrist', 'panic attacks': 'Psychiatrist', 'mood swings': 'Psychiatrist',
+      'mental health': 'Psychiatrist', 'sleep problems': 'Psychiatrist',
+      // Women's Health
+      'period problems': 'Gynecologist', 'pregnancy': 'Gynecologist', 'menstrual pain': 'Gynecologist',
+      'irregular periods': 'Gynecologist', 'pcos': 'Gynecologist', 'pelvic pain': 'Gynecologist',
+      // Urinary
+      'urinary problems': 'Urologist', 'kidney pain': 'Urologist', 'blood in urine': 'Urologist',
+      'frequent urination': 'Urologist', 'kidney stone': 'Urologist',
+      // Diabetes / Hormones
+      'diabetes': 'Endocrinologist', 'thyroid': 'Endocrinologist', 'weight gain': 'Endocrinologist',
+      'hormonal imbalance': 'Endocrinologist',
+      // Teeth
+      'toothache': 'Dentist', 'tooth pain': 'Dentist', 'bleeding gums': 'Dentist', 'cavity': 'Dentist',
+      // General / Common
+      'fever': 'General Physician', 'cold': 'General Physician', 'flu': 'General Physician',
+      'body pain': 'General Physician', 'fatigue': 'General Physician', 'weakness': 'General Physician',
+      'weight loss': 'General Physician', 'loss of appetite': 'General Physician', 'general checkup': 'General Physician',
+      'not feeling well': 'General Physician', 'feeling sick': 'General Physician'
+    };
+
+    const lower = message.toLowerCase();
+
+    // Find matching symptoms in the message
+    const matchedSymptoms = [];
+    const matchedSpecializations = new Set();
+
+    for (const [symptom, spec] of Object.entries(symptomMap)) {
+      if (lower.includes(symptom)) {
+        matchedSymptoms.push(symptom);
+        matchedSpecializations.add(spec);
+      }
+    }
+
+    // If no keyword matches, try AI analysis
+    if (matchedSymptoms.length === 0) {
+      try {
+        const aiAnalysis = await geminiService.analyzeSymptoms(message);
+        if (aiAnalysis && aiAnalysis.specializations && aiAnalysis.specializations.length > 0) {
+          let response = `Based on your symptoms, here's my analysis:\n\n`;
+          response += `📋 **Symptoms identified:** ${aiAnalysis.symptoms || message}\n\n`;
+          response += `🩺 **Recommended specialist(s):**\n`;
+          aiAnalysis.specializations.forEach(spec => {
+            response += `• **${spec}**\n`;
+          });
+          if (aiAnalysis.advice) {
+            response += `\n💡 **General advice:** ${aiAnalysis.advice}\n`;
+          }
+          response += `\n⚠️ **Disclaimer:** This is AI-based guidance, not a medical diagnosis. Please consult a qualified doctor.\n\n`;
+
+          // Try to find doctors for the first specialization
+          const primarySpec = aiAnalysis.specializations[0];
+          try {
+            const doctors = await this._findDoctors({ specialization: primarySpec, limit: 3, sort: { 'rating.average': -1 } });
+            if (doctors.length > 0) {
+              response += `Here are available **${primarySpec}** doctors:\n\n`;
+              doctors.forEach((doc, i) => {
+                const name = doc.userId ? `Dr. ${doc.userId.firstName} ${doc.userId.lastName}` : 'Doctor';
+                response += `${i + 1}. **${name}** — ⭐ ${doc.rating.average.toFixed(1)} | ₹${doc.consultationFee} | ${doc.experience} yrs exp\n`;
+              });
+              response += `\nWould you like to **book an appointment** with any of them?`;
+            }
+          } catch (e) {
+            response += `Would you like me to **find a ${primarySpec}** for you?`;
+          }
+          return response;
+        }
+      } catch (e) {
+        console.error('AI symptom analysis error:', e);
+      }
+
+      // Fallback — ask for more details
+      return "I'd like to help you find the right doctor! 🩺\n\nCould you describe your symptoms in a bit more detail? For example:\n• Where is the pain or discomfort?\n• How long have you had these symptoms?\n• Any other symptoms like fever, nausea, or dizziness?\n\nThe more you tell me, the better I can suggest the right specialist!\n\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**";
+    }
+
+    // Build response from keyword matches
+    const specs = Array.from(matchedSpecializations);
+    let response = `Based on your symptoms, here's what I recommend:\n\n`;
+    response += `📋 **Symptoms detected:** ${matchedSymptoms.join(', ')}\n\n`;
+    response += `🩺 **Recommended specialist(s):**\n`;
+    specs.forEach(spec => {
+      response += `• **${spec}**\n`;
+    });
+
+    // Provide basic advice based on the primary specialization
+    const primarySpec = specs[0];
+    const adviceMap = {
+      'General Physician': 'Stay hydrated, rest well, and monitor your temperature. If symptoms persist for more than 3 days, see a doctor.',
+      'Cardiologist': 'Avoid strenuous activity. If you experience severe chest pain, call 108 immediately.',
+      'Dermatologist': 'Avoid scratching or applying unknown creams. Keep the area clean and dry.',
+      'Neurologist': 'Rest in a quiet, dark room. Stay hydrated and track when symptoms occur.',
+      'Orthopedic': 'Apply ice to reduce swelling, avoid putting weight on the affected area, and rest.',
+      'Gastroenterologist': 'Eat light meals, stay hydrated, and avoid spicy or oily foods.',
+      'Pulmonologist': 'Avoid smoke and dust. If breathing difficulty is severe, seek immediate help.',
+      'Psychiatrist': 'Practice deep breathing, maintain a routine, and talk to someone you trust.',
+      'Ophthalmologist': 'Avoid rubbing your eyes, reduce screen time, and wash your eyes with clean water.',
+      'ENT Specialist': 'Gargle with warm salt water, stay hydrated, and avoid cold drinks.',
+      'Pediatrician': 'Keep the child hydrated, monitor temperature, and ensure proper rest.',
+      'Gynecologist': 'Track your symptoms and cycle patterns. Stay hydrated and rest.',
+      'Urologist': 'Drink plenty of water and avoid holding urine for long periods.',
+      'Endocrinologist': 'Maintain a balanced diet and monitor your blood sugar/thyroid levels regularly.',
+      'Dentist': 'Rinse with warm salt water, avoid very hot or cold foods, and maintain oral hygiene.'
+    };
+
+    if (adviceMap[primarySpec]) {
+      response += `\n💡 **Quick tip:** ${adviceMap[primarySpec]}\n`;
+    }
+
+    response += `\n⚠️ **Disclaimer:** This is AI-based guidance, not a medical diagnosis. Please consult a qualified doctor for proper evaluation.\n\n`;
+
+    // Find available doctors for the primary specialization
+    try {
+      const doctors = await this._findDoctors({ specialization: primarySpec, limit: 3, sort: { 'rating.average': -1 } });
+      if (doctors.length > 0) {
+        response += `Here are available **${primarySpec}** doctors on our platform:\n\n`;
+        doctors.forEach((doc, i) => {
+          const name = doc.userId ? `Dr. ${doc.userId.firstName} ${doc.userId.lastName}` : 'Doctor';
+          response += `${i + 1}. **${name}** — ⭐ ${doc.rating.average.toFixed(1)} | ₹${doc.consultationFee} | ${doc.experience} yrs exp\n`;
+        });
+        response += `\nWould you like to **book an appointment** with any of them? Just say "book with doctor 1" or tell me the name!`;
+      } else {
+        response += `I couldn't find ${primarySpec} doctors right now. Visit the **Doctors** page to browse all specialists.`;
+      }
+    } catch (error) {
+      console.error('Error finding doctors for symptoms:', error);
+      response += `Would you like me to **find a ${primarySpec}** for you?`;
+    }
+
+    return response;
+  }
+
   // ─── MEDICAL QUERY ───────────────────────────────
   async _handleMedicalQuery(message, session) {
     const contextStr = session.history.slice(-4).map(h => `${h.role}: ${h.content}`).join('\n');
