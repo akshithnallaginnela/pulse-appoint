@@ -87,11 +87,13 @@ const validateUserLogin = [
 // Doctor profile validation
 const validateDoctorProfile = [
   body('licenseNumber')
+    .optional()
     .trim()
     .notEmpty()
     .withMessage('Medical license number is required'),
   
   body('specialization')
+    .optional()
     .isIn([
       'Cardiologist', 'Pediatrician', 'Dermatologist', 'Orthopedic Surgeon',
       'General Physician', 'Neurologist', 'Gynecologist', 'Psychiatrist',
@@ -103,10 +105,12 @@ const validateDoctorProfile = [
     .withMessage('Invalid specialization'),
   
   body('experience')
+    .optional()
     .isInt({ min: 0, max: 50 })
     .withMessage('Experience must be between 0 and 50 years'),
   
   body('consultationFee')
+    .optional()
     .isFloat({ min: 0 })
     .withMessage('Consultation fee must be a positive number'),
   
