@@ -67,12 +67,22 @@ router.post('/register', validateUserRegistration, async (req, res) => {
 // @access  Public
 router.post('/login', validateUserLogin, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
     // Find user and include password for comparison
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // If role is specified, validate it matches the user's role
+    if (role) {
+      if (role === 'doctor' && user.role !== 'doctor') {
+        return res.status(401).json({ message: 'This account is not registered as a doctor. Please use the Patient Login.' });
+      }
+      if (role === 'patient' && user.role === 'doctor') {
+        return res.status(401).json({ message: 'This is a doctor account. Please use the Doctor Login.' });
+      }
     }
 
     // Check if user is active

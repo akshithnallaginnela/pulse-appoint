@@ -87,7 +87,7 @@ export const authAPI = {
   },
 
   // Login user
-  login: async (credentials: { email: string; password: string }) => {
+  login: async (credentials: { email: string; password: string; role?: string }) => {
     return apiRequest('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
