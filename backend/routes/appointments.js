@@ -93,6 +93,15 @@ router.post('/', verifyToken, requirePatient, validateAppointmentBooking, async 
     // Populate the appointment with doctor and patient details
     await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
 
+    // Emit real-time event to the doctor
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`doctor-${doctorId}`).emit('new-appointment', {
+        appointment,
+        message: `New appointment from ${req.user.firstName} ${req.user.lastName}`
+      });
+    }
+
     res.status(201).json({
       message: 'Appointment booked successfully',
       appointment
@@ -463,6 +472,20 @@ router.put('/:id/status', verifyToken, requireDoctor, validateObjectId('id'), as
     await appointment.save();
 
     await appointment.populate([doctorPopulateConfig, patientPopulateConfig]);
+
+    // Emit real-time event to the patient
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`patient-${appointment.patientId._id || appointment.patientId}`).emit('appointment-status-updated', {
+        appointment,
+        message: `Your appointment has been ${status}`
+      });
+      // Also notify the doctor's own other tabs/devices
+      io.to(`doctor-${appointment.doctorId._id || appointment.doctorId}`).emit('appointment-status-updated', {
+        appointment,
+        message: `Appointment ${status}`
+      });
+    }
 
     res.json({
       message: `Appointment ${status} successfully`,
