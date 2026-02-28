@@ -57,7 +57,7 @@ class ChatbotService {
       // ── Conversation continuation ──────────────────────────────
       const MULTI_TURN_INTENTS = new Set([
         'book_appointment', 'check_availability', 'find_doctor', 'doctor_details',
-        'cancel_appointment', 'reschedule_appointment'
+        'cancel_appointment', 'reschedule_appointment', 'symptom_analysis'
       ]);
       const ENTITY_ONLY_INTENTS = new Set(['find_doctor']);
       const EXPLICIT_INTENTS = new Set([
@@ -98,7 +98,7 @@ class ChatbotService {
 
       switch (intent) {
         case 'greeting':
-          response = "Hello! 👋 Welcome to PulseAppoint! I'm your customer support assistant.\n\nI can help you with:\n• **Finding doctors** by specialization\n• **Booking appointments** directly in this chat\n• **Cancelling or rescheduling** your appointments\n• **Viewing your appointments**\n• **Payment & refund** queries\n• **Doctor details** and availability\n• **General health** questions\n\nWhat can I help you with today?";
+          response = "Hello! 👋 Welcome to PulseAppoint! I'm your customer support assistant.\n\nI can help you with:\n• **Finding doctors** by specialization or symptoms\n• **Booking appointments** directly in this chat\n• **Cancelling or rescheduling** your appointments\n• **Viewing your appointments**\n• **Symptom analysis** — tell me your symptoms and I'll suggest the right specialist\n• **Payment & refund** queries\n• **Doctor details** and availability\n\nWhat can I help you with today?";
           break;
 
         case 'farewell':
@@ -127,6 +127,10 @@ class ChatbotService {
 
         case 'reschedule_appointment':
           response = await this._handleRescheduleAppointment(entities, session, userId, message);
+          break;
+
+        case 'symptom_analysis':
+          response = await this._handleSymptomAnalysis(message, entities, session);
           break;
 
         case 'view_appointments':
@@ -182,7 +186,7 @@ class ChatbotService {
           const contextStr = session.history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n');
           response = await geminiService.generateResponse(message, contextStr);
           if (!response) {
-            response = "I'm here to help you with anything related to PulseAppoint! 😊\n\nHere are some things I can assist with:\n• **How to book** an appointment\n• **How to cancel** or **reschedule**\n• **View your appointments**\n• **Find a doctor** by specialization\n• **Payment** and **refund** information\n\nPlease let me know what you need!";
+            response = "I'm here to help you with anything related to PulseAppoint! 😊\n\nHere are some things I can assist with:\n• **Book an appointment** right here in chat\n• **Cancel** or **reschedule** appointments\n• **View your appointments**\n• **Find a doctor** by specialization or symptoms\n• **Tell me your symptoms** and I'll suggest the right specialist\n• **Payment** and **refund** information\n\nPlease let me know what you need!";
           }
           break;
       }
