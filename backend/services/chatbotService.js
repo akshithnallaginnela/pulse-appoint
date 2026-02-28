@@ -47,6 +47,20 @@ class ChatbotService {
 
       console.log(`[Chatbot] Intent: ${intent} Entities:`, JSON.stringify(entities));
 
+      // Safety net: extract date/time from raw message if AI/fallback missed them
+      if (!entities.date) {
+        const parsedDate = this._parseDate(message.trim());
+        if (parsedDate) {
+          entities.date = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth()+1).padStart(2,'0')}-${String(parsedDate.getDate()).padStart(2,'0')}`;
+        }
+      }
+      if (!entities.time) {
+        const parsedTime = this._parseTime(message.trim());
+        if (parsedTime) {
+          entities.time = parsedTime;
+        }
+      }
+
       // Merge entities into session context
       if (!session.context) session.context = {};
       if (entities.specialization) session.context.specialization = entities.specialization;
@@ -74,8 +88,13 @@ class ChatbotService {
         // Also check if user typed a bare number (doctor/appointment selection)
         const bareNumber = /^\d+$/.test(message.trim());
 
-        if (hasNewContext || bareNumber) {
-          if (intent === 'other' || (ENTITY_ONLY_INTENTS.has(intent) && !EXPLICIT_INTENTS.has(intent) && previousIntent !== intent)) {
+        // When in a multi-turn flow, ALWAYS continue if intent is 'other'
+        // (e.g. user typed "march 12th" which doesn't match any explicit intent)
+        if (intent === 'other') {
+          console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (current was 'other')`);
+          intent = previousIntent;
+        } else if (hasNewContext || bareNumber) {
+          if (!EXPLICIT_INTENTS.has(intent) && previousIntent !== intent) {
             console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (was '${intent}', got new entities)`);
             intent = previousIntent;
           }
@@ -342,14 +361,24 @@ class ChatbotService {
     }
 
     // Step 3: Need date
-    const currentDate = entities.date || session.context.date;
+    let currentDate = entities.date || session.context.date;
+    // Try parsing the raw message as a date if entities didn't extract one
+    if (!currentDate && session.context.selectedDoctorId) {
+      const tryParsed = this._parseDate(rawMessage);
+      if (tryParsed) currentDate = rawMessage;
+    }
     if (!currentDate) {
       return `Great choice! When would you like your appointment with **${session.context.selectedDoctorName || 'the doctor'}**?\n\nPlease provide a date (e.g., "tomorrow", "March 5th", "2026-03-01").`;
     }
     session.context.date = currentDate;
 
     // Step 4: Need time
-    const currentTime = entities.time || session.context.time;
+    let currentTime = entities.time || session.context.time;
+    // Try parsing the raw message as a time if entities didn't extract one
+    if (!currentTime && session.context.date) {
+      const tryParsed = this._parseTime(rawMessage);
+      if (tryParsed) currentTime = rawMessage;
+    }
     if (!currentTime) {
       return `Got it — date is **${currentDate}**.\n\nWhat **time** works best? (e.g., "10:00 AM", "14:30")\n\n💡 Tip: You can ask me to "check availability" to see open slots.`;
     }
@@ -496,9 +525,10 @@ class ChatbotService {
   async _handleCheckAvailability(entities, session) {
     const specialization = entities.specialization || session.context.specialization;
     const doctorName = entities.doctorName || session.context.doctorName;
+    const requestedDate = entities.date || session.context.date;
 
     if (!specialization && !doctorName) {
-      return "I can check doctor availability for you! 🕐\n\nWhich doctor or specialization are you interested in?\n\nFor example:\n• \"Is there a cardiologist available today?\"\n• \"Check availability for Dr. Smith\"";
+      return "I can check doctor availability for you! 🕐\n\nWhich doctor or specialization are you interested in?\n\nFor example:\n• \"Is there a cardiologist available today?\"\n• \"Check availability for Dr. Smith on March 12th\"";
     }
 
     try {
@@ -509,30 +539,45 @@ class ChatbotService {
         return `I couldn't find any doctors matching "${searchTerm}". Please check the spelling or try a different name/specialization.\n\nYou can also visit the **Doctors** page to browse all available doctors.`;
       }
 
+      // Use requested date if provided (any order), otherwise check today
       const today = new Date();
-      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const todayName = dayNames[today.getDay()];
+      let checkDate = today;
+      let dateLabel = 'today';
+      if (requestedDate) {
+        const parsed = this._parseDate(requestedDate);
+        if (parsed) {
+          checkDate = parsed;
+          dateLabel = checkDate.toDateString() === today.toDateString()
+            ? 'today'
+            : `on **${checkDate.toDateString()}**`;
+        }
+      }
 
-      let response = "Here's today's availability:\n\n";
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const checkDayName = dayNames[checkDate.getDay()];
+
+      let response = dateLabel === 'today'
+        ? "Here's today's availability:\n\n"
+        : `Here's availability ${dateLabel}:\n\n`;
 
       doctors.forEach((doc) => {
         const name = doc.userId ? `Dr. ${doc.userId.firstName} ${doc.userId.lastName}` : 'Doctor';
-        const dayAvail = doc.availability[todayName];
+        const dayAvail = doc.availability[checkDayName];
         const available = dayAvail && dayAvail.isAvailable;
 
         response += `**${name}** (${doc.specialization})\n`;
         if (available) {
-          response += `  ✅ Available today: ${dayAvail.startTime} - ${dayAvail.endTime}\n`;
+          response += `  ✅ Available ${dateLabel}: ${dayAvail.startTime} - ${dayAvail.endTime}\n`;
           if (dayAvail.breakStartTime && dayAvail.breakEndTime) {
             response += `  ☕ Break: ${dayAvail.breakStartTime} - ${dayAvail.breakEndTime}\n`;
           }
           response += `  💰 Fee: ₹${doc.consultationFee}\n\n`;
         } else {
-          response += `  ❌ Not available today\n\n`;
+          response += `  ❌ Not available ${dateLabel}\n\n`;
         }
       });
 
-      response += "Would you like to **book an appointment** with any of these doctors?\n\n💡 For detailed availability on other dates, visit the doctor's profile page.";
+      response += "Would you like to **book an appointment** with any of these doctors?";
       return response;
     } catch (error) {
       console.error('Error checking availability:', error);
@@ -722,7 +767,7 @@ class ChatbotService {
           session.context.rescheduleDoctorId = selected.doctorId;
           delete session.context.rescheduleCandidates;
           session.markModified('context');
-          return "What **new date** would you like? (e.g., \"tomorrow\", \"March 10th\", \"2026-03-10\")";
+          // Fall through — if date/time already provided (in any order), skip asking
         } else {
           return `Please type a number between 1 and ${session.context.rescheduleCandidates.length} to select an appointment.`;
         }
@@ -770,16 +815,26 @@ class ChatbotService {
         return response;
       }
 
-      // Step 2: Need new date
-      const newDate = entities.date || session.context.rescheduleNewDate;
+      // Step 2: Need new date (check all sources — data can arrive in any order)
+      let newDate = entities.date || session.context.rescheduleNewDate || session.context.date;
+      // Try parsing the raw message as a date if entities didn't extract one
+      if (!newDate && session.context.rescheduleTargetId) {
+        const tryParsed = this._parseDate(rawMessage);
+        if (tryParsed) newDate = rawMessage;
+      }
       if (!newDate) {
         return "What **new date** would you like? (e.g., \"tomorrow\", \"March 10th\", \"2026-03-10\")";
       }
       session.context.rescheduleNewDate = newDate;
       session.markModified('context');
 
-      // Step 3: Need new time
-      const newTime = entities.time || session.context.rescheduleNewTime;
+      // Step 3: Need new time (check all sources — data can arrive in any order)
+      let newTime = entities.time || session.context.rescheduleNewTime || session.context.time;
+      // Try parsing the raw message as a time if entities didn't extract one
+      if (!newTime && session.context.rescheduleNewDate) {
+        const tryParsed = this._parseTime(rawMessage);
+        if (tryParsed) newTime = rawMessage;
+      }
       if (!newTime) {
         return `Got it — **${newDate}**.\n\nWhat **new time** would you like? (e.g., "10:00 AM", "14:30")`;
       }

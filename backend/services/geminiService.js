@@ -171,16 +171,60 @@ User message: "${message}"`;
 
     // Detect date (basic patterns)
     const todayDate = new Date();
+    const monthNames = {
+      january: 0, jan: 0, february: 1, feb: 1, march: 2, mar: 2,
+      april: 3, apr: 3, may: 4, june: 5, jun: 5, july: 6, jul: 6,
+      august: 7, aug: 7, september: 8, sep: 8, october: 9, oct: 9,
+      november: 10, nov: 10, december: 11, dec: 11
+    };
+    // Helper: format Date to YYYY-MM-DD using local time (avoids UTC timezone shift)
+    const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
     if (/\btoday\b/.test(lower)) {
-      entities.date = todayDate.toISOString().split('T')[0];
+      entities.date = fmtDate(todayDate);
     } else if (/\btomorrow\b/.test(lower)) {
       const tmrw = new Date(todayDate);
       tmrw.setDate(tmrw.getDate() + 1);
-      entities.date = tmrw.toISOString().split('T')[0];
+      entities.date = fmtDate(tmrw);
+    } else if (/\bday after tomorrow\b/.test(lower)) {
+      const dat = new Date(todayDate);
+      dat.setDate(dat.getDate() + 2);
+      entities.date = fmtDate(dat);
     } else {
       // Try YYYY-MM-DD
       const isoMatch = message.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-      if (isoMatch) entities.date = isoMatch[1];
+      if (isoMatch) {
+        entities.date = isoMatch[1];
+      } else {
+        // Try "March 12th", "march 12", "Mar 5th"
+        const monthDayMatch = lower.match(/\b([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+        if (monthDayMatch && monthNames[monthDayMatch[1]] !== undefined) {
+          const month = monthNames[monthDayMatch[1]];
+          const day = parseInt(monthDayMatch[2]);
+          const year = todayDate.getFullYear();
+          const d = new Date(year, month, day);
+          if (d < todayDate) d.setFullYear(year + 1);
+          entities.date = fmtDate(d);
+        } else {
+          // Try "12th March", "12 march"
+          const dayMonthMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)\b/);
+          if (dayMonthMatch && monthNames[dayMonthMatch[2]] !== undefined) {
+            const day = parseInt(dayMonthMatch[1]);
+            const month = monthNames[dayMonthMatch[2]];
+            const year = todayDate.getFullYear();
+            const d = new Date(year, month, day);
+            if (d < todayDate) d.setFullYear(year + 1);
+            entities.date = fmtDate(d);
+          } else {
+            // Try DD/MM/YYYY or DD-MM-YYYY
+            const dmyMatch = lower.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
+            if (dmyMatch) {
+              const d = new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
+              entities.date = fmtDate(d);
+            }
+          }
+        }
+      }
     }
 
     // Detect time (e.g., "10:00 AM", "2:30 PM", "14:30")
