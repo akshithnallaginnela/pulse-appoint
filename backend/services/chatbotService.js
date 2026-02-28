@@ -36,7 +36,7 @@ class ChatbotService {
     try {
       // Analyze intent
       const analysis = await geminiService.analyzeIntent(message);
-      const { intent, entities } = analysis;
+      let { intent, entities } = analysis;
 
       console.log(`[Chatbot] Intent: ${intent} Entities:`, JSON.stringify(entities));
 
@@ -45,6 +45,25 @@ class ChatbotService {
       if (entities.doctorName) session.context.doctorName = entities.doctorName;
       if (entities.date) session.context.date = entities.date;
       if (entities.time) session.context.time = entities.time;
+
+      // ── Conversation continuation ──────────────────────────────
+      // If the current intent is generic ('other') but we were in the middle
+      // of a multi-turn flow and the user provided new entities, continue
+      // with the previous intent so the handler can use the new info.
+      const previousIntent = session.context.lastIntent;
+      if (intent === 'other' && previousIntent) {
+        const hasNewContext = entities.doctorName || entities.specialization
+          || entities.date || entities.time;
+        if (hasNewContext) {
+          console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (current was 'other' but got new entities)`);
+          intent = previousIntent;
+        }
+      }
+
+      // Save the resolved intent for future continuation (skip 'other')
+      if (intent !== 'other') {
+        session.context.lastIntent = intent;
+      }
 
       let response;
 
@@ -224,8 +243,12 @@ class ChatbotService {
 
     // If searching by doctor name, first find matching user IDs
     if (doctorName) {
+      // Strip common prefixes like "Dr.", "Dr ", "Doctor "
+      let cleanName = doctorName.replace(/^(dr\.?\s*|doctor\s+)/i, '').trim();
+      if (!cleanName) cleanName = doctorName.trim(); // fallback if only prefix
+
       const User = require('../models/User');
-      const nameParts = doctorName.trim().split(/\s+/);
+      const nameParts = cleanName.split(/\s+/);
       let userQuery;
       if (nameParts.length === 1) {
         // Single name — match against either first or last name

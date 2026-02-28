@@ -217,6 +217,11 @@ User message: "${message}"`;
       intent = 'find_doctor';
     }
 
+    // If we found a doctor name but intent is still 'other', default to find_doctor
+    if (entities.doctorName && intent === 'other') {
+      intent = 'find_doctor';
+    }
+
     return {
       intent,
       entities,
