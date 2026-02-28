@@ -18,6 +18,9 @@ import DoctorDashboard from "./pages/DoctorDashboard";
 import DoctorAppointments from "./pages/DoctorAppointments";
 import DoctorProfile from "./pages/DoctorProfile";
 import DoctorAvailability from "./pages/DoctorAvailability";
+import Settings from "./pages/Settings";
+import ForgotPassword from "./pages/ForgotPassword";
+import Terms from "./pages/Terms";
 import Chatbot from "./components/Chatbot";
 
 const queryClient = new QueryClient();
@@ -39,6 +42,9 @@ const App = () => (
               <Route path="/appointments" element={<Appointments />} />
               <Route path="/appointments/book/:id" element={<BookAppointment />} />
               <Route path="/about" element={<About />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/terms" element={<Terms />} />
               {/* Doctor Routes */}
               <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
               <Route path="/doctor/appointments" element={<DoctorAppointments />} />
