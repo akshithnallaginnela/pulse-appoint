@@ -24,7 +24,7 @@ const DoctorLogin = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login(loginForm.email, loginForm.password);
+      await login(loginForm.email, loginForm.password, "doctor");
       toast.success("Login successful!");
       navigate("/doctor/dashboard");
     } catch (error: any) {
