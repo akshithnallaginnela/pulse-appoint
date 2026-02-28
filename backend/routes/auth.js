@@ -12,7 +12,7 @@ const router = express.Router();
 // @access  Public
 router.post('/register', validateUserRegistration, async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, dateOfBirth, gender, role = 'patient' } = req.body;
+    const { firstName, lastName, email, password, phone, dateOfBirth, gender } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -20,7 +20,7 @@ router.post('/register', validateUserRegistration, async (req, res) => {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    // Create new user
+    // Create new user - always as patient (doctors are created by admin)
     const user = new User({
       firstName,
       lastName,
@@ -29,7 +29,7 @@ router.post('/register', validateUserRegistration, async (req, res) => {
       phone,
       dateOfBirth,
       gender,
-      role
+      role: 'patient'
     });
 
     await user.save();
