@@ -197,11 +197,11 @@ User message: "${message}"`;
       intent = 'farewell';
     } else if (/\b(thanks|thank you|appreciate|thx)\b/.test(lower)) {
       intent = 'thanks';
-    } else if (/how.*(book|schedule|make.*appointment)|steps.*book|process.*book|guide.*book/.test(lower)) {
+    } else if (/how.*(book|schedule|make.*appointment)|steps.*book|process.*book|guide.*book|help.*(book|booking)|booking.*(process|steps|guide|procedure)/.test(lower)) {
       intent = 'how_to_book';
-    } else if (/how.*(cancel|cancellation)|steps.*cancel|process.*cancel|guide.*cancel/.test(lower)) {
+    } else if (/how.*(cancel|cancellation)|steps.*cancel|process.*(cancel|cancellation)|guide.*cancel|help.*(cancel|cancellation)|cancell?ation.*(process|steps|guide|procedure|policy|help)/.test(lower)) {
       intent = 'how_to_cancel';
-    } else if (/how.*(reschedule|change.*appointment)|steps.*reschedule/.test(lower)) {
+    } else if (/how.*(reschedule|change.*appointment)|steps.*reschedule|process.*reschedule|help.*reschedul|reschedul.*(process|steps|guide|procedure)/.test(lower)) {
       intent = 'how_to_reschedule';
     } else if (/\b(refund|money back|get.*refund|refund.*policy|refund.*status)\b/.test(lower)) {
       intent = 'refund_query';
@@ -211,7 +211,7 @@ User message: "${message}"`;
       intent = 'book_appointment';
     } else if (/\b(available|availability|free|open slot|when.*available)\b/.test(lower)) {
       intent = 'check_availability';
-    } else if (/\b(cancel)\b/.test(lower)) {
+    } else if (/\b(cancell?ation|cancel)\b/.test(lower)) {
       intent = 'cancel_appointment';
     } else if (/\b(reschedule|change.*time|move.*appointment)\b/.test(lower)) {
       intent = 'reschedule_appointment';
@@ -221,9 +221,9 @@ User message: "${message}"`;
       intent = 'doctor_details';
     } else if (/\b(find|search|looking for|doctor|specialist)\b/.test(lower) || entities.specialization) {
       intent = 'find_doctor';
-    } else if (/\b(account|profile|login|sign.*up|register|password|forgot)\b/.test(lower)) {
+    } else if (/\b(account|login|sign.*up|register|password|forgot)\b/.test(lower)) {
       intent = 'account_help';
-    } else if (/how.*work|what.*pulseappoint|about.*platform|feature|help|support|navigate|where|page/.test(lower)) {
+    } else if (/how.*work|what.*pulseappoint|about.*platform|feature|navigate|where.*page|platform.*(help|support|guide)|how.*use/.test(lower)) {
       intent = 'platform_help';
     } else if (/\b(health|symptom|disease|condition|medicine|treatment|diagnos|sick|pain|fever|cold|cough|headache)\b/.test(lower)) {
       intent = 'medical_query';

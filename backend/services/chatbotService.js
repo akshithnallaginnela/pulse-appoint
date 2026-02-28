@@ -47,15 +47,43 @@ class ChatbotService {
       if (entities.time) session.context.time = entities.time;
 
       // ── Conversation continuation ──────────────────────────────
-      // If the current intent is generic ('other') but we were in the middle
-      // of a multi-turn flow and the user provided new entities, continue
-      // with the previous intent so the handler can use the new info.
+      // Multi-turn intents: these ask follow-up questions and expect
+      // the user to provide entities (specialization, doctorName, date, time).
+      const MULTI_TURN_INTENTS = new Set([
+        'book_appointment', 'check_availability', 'find_doctor', 'doctor_details'
+      ]);
+      // Intents that are "entity-only" — they fire when the user just provides
+      // a specialization/name without an explicit action verb.
+      const ENTITY_ONLY_INTENTS = new Set(['find_doctor']);
+      // Intents that should never be overridden by continuation
+      const EXPLICIT_INTENTS = new Set([
+        'greeting', 'farewell', 'thanks', 'how_to_book', 'how_to_cancel',
+        'how_to_reschedule', 'payment_info', 'refund_query', 'account_help',
+        'platform_help', 'medical_query', 'complaint', 'urgent_help'
+      ]);
+
       const previousIntent = session.context.lastIntent;
-      if (intent === 'other' && previousIntent) {
+      if (previousIntent && MULTI_TURN_INTENTS.has(previousIntent)) {
+        const hasNewContext = entities.doctorName || entities.specialization
+          || entities.date || entities.time;
+
+        if (hasNewContext) {
+          // Case 1: intent is 'other' — user just typed a bare entity
+          // Case 2: intent is an entity-only intent like 'find_doctor'
+          //         but we were in a multi-turn flow (e.g. book_appointment
+          //         asked for specialization, user said "Cardiologist")
+          // In both cases, continue the previous multi-turn flow.
+          if (intent === 'other' || (ENTITY_ONLY_INTENTS.has(intent) && !EXPLICIT_INTENTS.has(intent) && previousIntent !== intent)) {
+            console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (was '${intent}', got new entities)`);
+            intent = previousIntent;
+          }
+        }
+      } else if (intent === 'other' && previousIntent) {
+        // Not a multi-turn flow but intent is still 'other' — try continuing
         const hasNewContext = entities.doctorName || entities.specialization
           || entities.date || entities.time;
         if (hasNewContext) {
-          console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (current was 'other' but got new entities)`);
+          console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (current was 'other' with new entities)`);
           intent = previousIntent;
         }
       }
