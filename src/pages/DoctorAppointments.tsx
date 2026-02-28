@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Calendar, Clock, Search, Filter } from 'lucide-react';
+import { Calendar, Clock, Search, Filter, Bell } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/services/api';
+import { useSocket } from '@/hooks/useSocket';
 
 interface Appointment {
     _id: string;
@@ -33,13 +34,39 @@ interface Appointment {
 }
 
 const DoctorAppointments = () => {
-    const { user } = useAuth();
+    const { user, doctorProfile } = useAuth();
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('all');
     const [loading, setLoading] = useState(true);
+    const [newAppointmentAlert, setNewAppointmentAlert] = useState(false);
+
+    // Real-time: listen for new appointments and status updates
+    const handleNewAppointment = useCallback((data: any) => {
+        toast.success(data.message || 'New appointment received!', {
+            icon: '🔔',
+            duration: 5000,
+        });
+        setNewAppointmentAlert(true);
+        setTimeout(() => setNewAppointmentAlert(false), 3000);
+        fetchAppointments();
+    }, []);
+
+    const handleStatusUpdate = useCallback((data: any) => {
+        toast.info(data.message || 'Appointment updated');
+        fetchAppointments();
+    }, []);
+
+    useSocket(
+        doctorProfile?.id || null,
+        'doctor',
+        {
+            'new-appointment': handleNewAppointment,
+            'appointment-status-updated': handleStatusUpdate,
+        }
+    );
 
     useEffect(() => {
         if (user?.role !== 'doctor') {
@@ -158,8 +185,16 @@ const DoctorAppointments = () => {
 
             <main className="flex-1 container mx-auto px-4 py-8">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold mb-2">My Appointments</h1>
-                    <p className="text-muted-foreground">Manage all your patient appointments</p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-3xl font-bold mb-2">My Appointments</h1>
+                        {newAppointmentAlert && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium animate-pulse">
+                                <Bell className="h-4 w-4" />
+                                New appointment!
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-muted-foreground">Manage all your patient appointments — updates in real time</p>
                 </div>
 
                 {/* Search and Filter */}

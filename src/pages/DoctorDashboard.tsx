@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/services/api';
+import { useSocket } from '@/hooks/useSocket';
 
 interface Appointment {
     _id: string;
@@ -35,7 +36,7 @@ interface Stats {
 }
 
 const DoctorDashboard = () => {
-    const { user } = useAuth();
+    const { user, doctorProfile } = useAuth();
     const navigate = useNavigate();
     const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
     const [stats, setStats] = useState<Stats>({
@@ -45,6 +46,28 @@ const DoctorDashboard = () => {
         totalEarningsToday: 0
     });
     const [loading, setLoading] = useState(true);
+
+    // Real-time: auto-refresh dashboard when new appointments come in
+    const handleNewAppointment = useCallback((data: any) => {
+        toast.success(data.message || 'New appointment received!', {
+            icon: '🔔',
+            duration: 5000,
+        });
+        fetchDashboardData();
+    }, []);
+
+    const handleStatusUpdate = useCallback((data: any) => {
+        fetchDashboardData();
+    }, []);
+
+    useSocket(
+        doctorProfile?.id || null,
+        'doctor',
+        {
+            'new-appointment': handleNewAppointment,
+            'appointment-status-updated': handleStatusUpdate,
+        }
+    );
 
     useEffect(() => {
         if (user?.role !== 'doctor') {
