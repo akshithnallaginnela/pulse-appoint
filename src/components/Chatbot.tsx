@@ -11,11 +11,11 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  "How to book an appointment?",
-  "How to cancel or reschedule?",
+  "Book an appointment",
+  "View my appointments",
+  "Cancel an appointment",
+  "Reschedule an appointment",
   "Find a doctor",
-  "Payment & refund policy",
-  "Check doctor availability",
   "I need urgent help",
 ];
 
