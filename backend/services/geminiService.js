@@ -169,6 +169,27 @@ User message: "${message}"`;
       }
     }
 
+    // Detect date (basic patterns)
+    const todayDate = new Date();
+    if (/\btoday\b/.test(lower)) {
+      entities.date = todayDate.toISOString().split('T')[0];
+    } else if (/\btomorrow\b/.test(lower)) {
+      const tmrw = new Date(todayDate);
+      tmrw.setDate(tmrw.getDate() + 1);
+      entities.date = tmrw.toISOString().split('T')[0];
+    } else {
+      // Try YYYY-MM-DD
+      const isoMatch = message.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+      if (isoMatch) entities.date = isoMatch[1];
+    }
+
+    // Detect time (e.g., "10:00 AM", "2:30 PM", "14:30")
+    const timeMatch = message.match(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?)\b/i)
+      || message.match(/\b(\d{1,2}\s*(?:am|pm))\b/i);
+    if (timeMatch) {
+      entities.time = timeMatch[1].trim();
+    }
+
     // Detect intent — ordered from most specific to least
     if (/\b(hi|hello|hey|good morning|good evening|good afternoon)\b/.test(lower)) {
       intent = 'greeting';
