@@ -88,122 +88,8 @@ router.get('/specializations', async (req, res) => {
   }
 });
 
-// @route   GET /api/doctors/:id
-// @desc    Get doctor by ID
-// @access  Public
-router.get('/:id', validateObjectId('id'), async (req, res) => {
-  try {
-    const doctor = await Doctor.findById(req.params.id)
-      .populate('userId', 'firstName lastName email phone profileImage');
-
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    if (!doctor.isActive || !doctor.isVerified) {
-      return res.status(404).json({ message: 'Doctor profile not available' });
-    }
-
-    res.json({
-      message: 'Doctor retrieved successfully',
-      doctor
-    });
-  } catch (error) {
-    console.error('Get doctor error:', error);
-    res.status(500).json({ message: 'Server error while fetching doctor' });
-  }
-});
-
-// @route   GET /api/doctors/:id/availability
-// @desc    Get doctor's availability for a specific date
-// @access  Public
-router.get('/:id/availability', validateObjectId('id'), async (req, res) => {
-  try {
-    const { date } = req.query;
-
-    if (!date) {
-      return res.status(400).json({ message: 'Date is required' });
-    }
-
-    const doctor = await Doctor.findById(req.params.id);
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    const appointmentDate = new Date(date);
-    const dayName = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
-
-    // Get available time slots
-    const availableSlots = doctor.getAvailableSlots(dayName, date);
-
-    // Get booked appointments for this date
-    const bookedAppointments = await Appointment.find({
-      doctorId: doctor._id,
-      appointmentDate: appointmentDate,
-      status: { $in: ['confirmed', 'pending'] }
-    }).select('appointmentTime');
-
-    const bookedTimes = bookedAppointments.map(apt => apt.appointmentTime);
-
-    // Filter out booked slots
-    const freeSlots = availableSlots.filter(slot => !bookedTimes.includes(slot));
-
-    res.json({
-      message: 'Availability retrieved successfully',
-      availability: {
-        date: appointmentDate,
-        dayName,
-        availableSlots: freeSlots,
-        totalSlots: availableSlots.length,
-        bookedSlots: bookedTimes.length
-      }
-    });
-  } catch (error) {
-    console.error('Get availability error:', error);
-    res.status(500).json({ message: 'Server error while fetching availability' });
-  }
-});
-
-// @route   GET /api/doctors/:id/reviews
-// @desc    Get doctor's reviews
-// @access  Public
-router.get('/:id/reviews', validateObjectId('id'), validatePagination, async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-
-    const reviews = await Appointment.find({
-      doctorId: req.params.id,
-      'rating.score': { $exists: true }
-    })
-      .populate('patientId', 'firstName lastName')
-      .select('rating appointmentDate')
-      .sort({ 'rating.ratedAt': -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Appointment.countDocuments({
-      doctorId: req.params.id,
-      'rating.score': { $exists: true }
-    });
-
-    res.json({
-      message: 'Reviews retrieved successfully',
-      reviews,
-      pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(total / limit),
-        totalReviews: total,
-        hasNextPage: page < Math.ceil(total / limit),
-        hasPrevPage: page > 1
-      }
-    });
-  } catch (error) {
-    console.error('Get reviews error:', error);
-    res.status(500).json({ message: 'Server error while fetching reviews' });
-  }
-});
+// NOTE: /:id, /:id/availability, /:id/reviews routes moved AFTER all named routes
+// to prevent Express from matching "appointments", "profile", etc. as :id parameter.
 
 // @route   GET /api/doctors/profile/me
 // @desc    Get current doctor's profile
@@ -553,6 +439,128 @@ router.get('/dashboard/stats', verifyToken, requireDoctor, async (req, res) => {
   } catch (error) {
     console.error('Get dashboard stats error:', error);
     res.status(500).json({ message: 'Server error while fetching dashboard stats' });
+  }
+});
+
+// =====================================================
+// PARAMETERIZED ROUTES - Must be LAST to avoid matching
+// named segments like "appointments", "profile" as :id
+// =====================================================
+
+// @route   GET /api/doctors/:id
+// @desc    Get doctor by ID
+// @access  Public
+router.get('/:id', validateObjectId('id'), async (req, res) => {
+  try {
+    const doctor = await Doctor.findById(req.params.id)
+      .populate('userId', 'firstName lastName email phone profileImage');
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    if (!doctor.isActive || !doctor.isVerified) {
+      return res.status(404).json({ message: 'Doctor profile not available' });
+    }
+
+    res.json({
+      message: 'Doctor retrieved successfully',
+      doctor
+    });
+  } catch (error) {
+    console.error('Get doctor error:', error);
+    res.status(500).json({ message: 'Server error while fetching doctor' });
+  }
+});
+
+// @route   GET /api/doctors/:id/availability
+// @desc    Get doctor's availability for a specific date
+// @access  Public
+router.get('/:id/availability', validateObjectId('id'), async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required' });
+    }
+
+    const doctor = await Doctor.findById(req.params.id);
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    const appointmentDate = new Date(date);
+    const dayName = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
+
+    // Get available time slots
+    const availableSlots = doctor.getAvailableSlots(dayName, date);
+
+    // Get booked appointments for this date
+    const bookedAppointments = await Appointment.find({
+      doctorId: doctor._id,
+      appointmentDate: appointmentDate,
+      status: { $in: ['confirmed', 'pending'] }
+    }).select('appointmentTime');
+
+    const bookedTimes = bookedAppointments.map(apt => apt.appointmentTime);
+
+    // Filter out booked slots
+    const freeSlots = availableSlots.filter(slot => !bookedTimes.includes(slot));
+
+    res.json({
+      message: 'Availability retrieved successfully',
+      availability: {
+        date: appointmentDate,
+        dayName,
+        availableSlots: freeSlots,
+        totalSlots: availableSlots.length,
+        bookedSlots: bookedTimes.length
+      }
+    });
+  } catch (error) {
+    console.error('Get availability error:', error);
+    res.status(500).json({ message: 'Server error while fetching availability' });
+  }
+});
+
+// @route   GET /api/doctors/:id/reviews
+// @desc    Get doctor's reviews
+// @access  Public
+router.get('/:id/reviews', validateObjectId('id'), validatePagination, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const reviews = await Appointment.find({
+      doctorId: req.params.id,
+      'rating.score': { $exists: true }
+    })
+      .populate('patientId', 'firstName lastName')
+      .select('rating appointmentDate')
+      .sort({ 'rating.ratedAt': -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Appointment.countDocuments({
+      doctorId: req.params.id,
+      'rating.score': { $exists: true }
+    });
+
+    res.json({
+      message: 'Reviews retrieved successfully',
+      reviews,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalReviews: total,
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get reviews error:', error);
+    res.status(500).json({ message: 'Server error while fetching reviews' });
   }
 });
 
