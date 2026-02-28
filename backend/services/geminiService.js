@@ -197,7 +197,7 @@ User message: "${message}"`;
       intent = 'farewell';
     } else if (/\b(thanks|thank you|appreciate|thx)\b/.test(lower)) {
       intent = 'thanks';
-    } else if (/how.*(book|schedule|make.*appointment)|steps.*book|process.*book|guide.*book|help.*(book|booking)|booking.*(process|steps|guide|procedure)/.test(lower)) {
+    } else if (/how.*(\bbook\b|\bschedule\b|make.*appointment)|steps.*\bbook\b|process.*\bbook\b|guide.*\bbook\b|help.*(\bbook\b|\bbooking\b)|booking.*(process|steps|guide|procedure)/.test(lower)) {
       intent = 'how_to_book';
     } else if (/how.*(cancel|cancellation)|steps.*cancel|process.*(cancel|cancellation)|guide.*cancel|help.*(cancel|cancellation)|cancell?ation.*(process|steps|guide|procedure|policy|help)/.test(lower)) {
       intent = 'how_to_cancel';
@@ -207,14 +207,12 @@ User message: "${message}"`;
       intent = 'refund_query';
     } else if (/\b(payment|pay|billing|charge|fee|cost|price|how much)\b/.test(lower)) {
       intent = 'payment_info';
-    } else if (/\b(book|schedule|appointment|make an appointment)\b/.test(lower)) {
-      intent = 'book_appointment';
-    } else if (/\b(available|availability|free|open slot|when.*available)\b/.test(lower)) {
-      intent = 'check_availability';
     } else if (/\b(cancell?ation|cancel)\b/.test(lower)) {
       intent = 'cancel_appointment';
     } else if (/\b(reschedule|change.*time|move.*appointment)\b/.test(lower)) {
       intent = 'reschedule_appointment';
+    } else if (/\b(book|schedule|appointment|make an appointment)\b/.test(lower)) {
+      intent = 'book_appointment';
     } else if (/\b(my appointment|view|upcoming|list.*appointment|appointment.*history)\b/.test(lower)) {
       intent = 'view_appointments';
     } else if (/doctor.*detail|about.*doctor|doctor.*info|profile|qualifi|experience|rating|review/.test(lower)) {
