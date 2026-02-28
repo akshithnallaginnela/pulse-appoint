@@ -162,8 +162,8 @@ User message: "${message}"`;
     if (drMatch) {
       // Remove trailing words that are common non-name tokens
       let name = drMatch[1].trim();
-      // Remove trailing noise words like 'available', 'today', 'appointment', etc.
-      name = name.replace(/\b(available|availability|today|tomorrow|appointment|details|info|profile|please|is|the|for|on|at)\b.*$/i, '').trim();
+      // Remove trailing noise words like 'available', 'book', 'appointment', etc.
+      name = name.replace(/\b(available|availability|today|tomorrow|appointment|details|info|profile|please|is|the|for|on|at|book|booking|cancel|schedule|check|find|search)\b.*$/i, '').trim();
       if (name.length > 0) {
         entities.doctorName = name;
       }
