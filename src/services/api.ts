@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 console.log('API_BASE_URL:', API_BASE_URL);
 console.log('Environment variables:', import.meta.env);
@@ -12,7 +12,7 @@ const getAuthToken = () => {
 // Helper function to make API requests
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = getAuthToken();
-  
+
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -28,16 +28,16 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
 
   try {
     const response = await fetch(fullUrl, config);
-    
+
     console.log('Response status:', response.status);
     console.log('Response headers:', response.headers);
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('API error response:', errorData);
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     console.log('API response data:', data);
     return data;
@@ -218,7 +218,7 @@ export const doctorsAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/doctors?${queryParams.toString()}`);
   },
 
@@ -268,7 +268,7 @@ export const doctorsAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/doctors/appointments/me?${queryParams.toString()}`);
   },
 
@@ -329,7 +329,7 @@ export const appointmentsAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/appointments?${queryParams.toString()}`);
   },
 
@@ -443,7 +443,7 @@ export const adminAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/admin/users?${queryParams.toString()}`);
   },
 
@@ -475,7 +475,7 @@ export const adminAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/admin/doctors?${queryParams.toString()}`);
   },
 
@@ -502,7 +502,7 @@ export const adminAPI = {
         queryParams.append(key, value.toString());
       }
     });
-    
+
     return apiRequest(`/admin/appointments?${queryParams.toString()}`);
   },
 
@@ -520,7 +520,7 @@ export const adminAPI = {
     queryParams.append('period', period);
     if (startDate) queryParams.append('startDate', startDate);
     if (endDate) queryParams.append('endDate', endDate);
-    
+
     return apiRequest(`/admin/reports/revenue?${queryParams.toString()}`);
   },
 
@@ -530,8 +530,26 @@ export const adminAPI = {
     queryParams.append('period', period);
     if (startDate) queryParams.append('startDate', startDate);
     if (endDate) queryParams.append('endDate', endDate);
-    
+
     return apiRequest(`/admin/reports/appointments?${queryParams.toString()}`);
+  },
+};
+
+// Chatbot API
+export const chatbotAPI = {
+  // Create a new chat session
+  createSession: async () => {
+    return apiRequest('/chatbot/session', {
+      method: 'POST',
+    });
+  },
+
+  // Send a message to the chatbot
+  sendMessage: async (message: string, sessionId: string) => {
+    return apiRequest('/chatbot/message', {
+      method: 'POST',
+      body: JSON.stringify({ message, sessionId }),
+    });
   },
 };
 
@@ -542,37 +560,6 @@ export const healthAPI = {
   },
 };
 
-// Chatbot API
-export const chatbotAPI = {
-  // Send message to chatbot
-  sendMessage: async (message: string, sessionId?: string) => {
-    return apiRequest('/chatbot/message', {
-      method: 'POST',
-      body: JSON.stringify({ message, sessionId }),
-    });
-  },
-
-  // Get conversation history
-  getHistory: async (sessionId: string) => {
-    return apiRequest(`/chatbot/session/${sessionId}`);
-  },
-
-  // Start new session
-  newSession: async () => {
-    return apiRequest('/chatbot/session/new', {
-      method: 'POST',
-    });
-  },
-
-  // End session
-  endSession: async (sessionId: string) => {
-    return apiRequest('/chatbot/session/end', {
-      method: 'POST',
-      body: JSON.stringify({ sessionId }),
-    });
-  },
-};
-
 export default {
   authAPI,
   usersAPI,
@@ -580,6 +567,7 @@ export default {
   appointmentsAPI,
   paymentsAPI,
   adminAPI,
-  healthAPI,
   chatbotAPI,
+  healthAPI,
 };
+

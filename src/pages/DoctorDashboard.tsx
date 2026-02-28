@@ -8,6 +8,7 @@ import { Calendar, Clock, Users, DollarSign, Activity, CheckCircle, XCircle } fr
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/services/api';
 
 interface Appointment {
     _id: string;
@@ -59,7 +60,7 @@ const DoctorDashboard = () => {
             const token = localStorage.getItem('token');
 
             // Fetch today's appointments
-            const appointmentsRes = await fetch(`${import.meta.env.VITE_API_URL}/doctors/appointments/today`, {
+            const appointmentsRes = await fetch(`${API_BASE_URL}/doctors/appointments/today`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -95,7 +96,7 @@ const DoctorDashboard = () => {
     const updateAppointmentStatus = async (appointmentId: string, newStatus: string) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/appointments/${appointmentId}/status`, {
+            const res = await fetch(`${API_BASE_URL}/appointments/${appointmentId}/status`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
