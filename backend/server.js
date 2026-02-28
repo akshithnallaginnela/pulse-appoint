@@ -44,8 +44,17 @@ io.on('connection', (socket) => {
   });
 });
 
-// Security middleware
-app.use(helmet());
+// CORS configuration (must be before helmet)
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+
+// Security middleware (configured to not block cross-origin requests)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: false,
+}));
 app.use(compression());
 
 // Rate limiting
@@ -55,12 +64,6 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
-
-// CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
