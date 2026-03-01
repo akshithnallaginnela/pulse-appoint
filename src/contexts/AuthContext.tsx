@@ -62,7 +62,7 @@ const initialState: AuthState = {
   doctorProfile: null,
   token: localStorage.getItem('token'),
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: !!localStorage.getItem('token'),
   error: null,
 };
 

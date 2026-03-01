@@ -35,7 +35,7 @@ const defaultDay: DayAvailability = {
 };
 
 const DoctorAvailability = () => {
-    const { user } = useAuth();
+    const { user, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -48,12 +48,13 @@ const DoctorAvailability = () => {
     });
 
     useEffect(() => {
+        if (authLoading) return;
         if (user?.role !== 'doctor') {
             navigate('/login');
             return;
         }
         fetchProfile();
-    }, [user, navigate]);
+    }, [user, authLoading, navigate]);
 
     const fetchProfile = async () => {
         try {

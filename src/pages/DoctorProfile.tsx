@@ -50,7 +50,7 @@ const languageOptions = [
 ];
 
 const DoctorProfilePage = () => {
-    const { user } = useAuth();
+    const { user, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [profile, setProfile] = useState<DoctorProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -67,12 +67,13 @@ const DoctorProfilePage = () => {
     });
 
     useEffect(() => {
+        if (authLoading) return;
         if (user?.role !== 'doctor') {
             navigate('/login');
             return;
         }
         fetchProfile();
-    }, [user, navigate]);
+    }, [user, authLoading, navigate]);
 
     const fetchProfile = async () => {
         try {

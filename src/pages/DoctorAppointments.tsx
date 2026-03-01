@@ -34,7 +34,7 @@ interface Appointment {
 }
 
 const DoctorAppointments = () => {
-    const { user, doctorProfile } = useAuth();
+    const { user, doctorProfile, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
@@ -69,12 +69,13 @@ const DoctorAppointments = () => {
     );
 
     useEffect(() => {
+        if (authLoading) return;
         if (user?.role !== 'doctor') {
             navigate('/login');
             return;
         }
         fetchAppointments();
-    }, [user, navigate]);
+    }, [user, authLoading, navigate]);
 
     useEffect(() => {
         filterAppointments();

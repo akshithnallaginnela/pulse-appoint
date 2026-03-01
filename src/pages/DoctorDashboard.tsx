@@ -36,7 +36,7 @@ interface Stats {
 }
 
 const DoctorDashboard = () => {
-    const { user, doctorProfile } = useAuth();
+    const { user, doctorProfile, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
     const [stats, setStats] = useState<Stats>({
@@ -70,12 +70,13 @@ const DoctorDashboard = () => {
     );
 
     useEffect(() => {
+        if (authLoading) return;
         if (user?.role !== 'doctor') {
             navigate('/login');
             return;
         }
         fetchDashboardData();
-    }, [user, navigate]);
+    }, [user, authLoading, navigate]);
 
     const fetchDashboardData = async () => {
         try {
