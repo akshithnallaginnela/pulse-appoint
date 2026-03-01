@@ -1020,6 +1020,11 @@ class ChatbotService {
       delete ctx.pendingCancelId;
     }
 
+    // Clear symptom history if not continuing symptom analysis
+    if (newIntent !== 'symptom_analysis') {
+      delete ctx.symptomHistory;
+    }
+
     // Always clear accumulated entities when switching intents.
     // Current-message entities are re-merged immediately after this call,
     // so only stale entities from previous turns are removed.
@@ -1342,6 +1347,10 @@ class ChatbotService {
 
     // Build response from keyword matches
     const specs = Array.from(matchedSpecializations);
+    // Clear symptom history after successful keyword analysis
+    delete session.context.symptomHistory;
+    session.markModified('context');
+
     let response = `Based on your symptoms, here's what I recommend:\n\n`;
     response += `📋 **Symptoms detected:** ${matchedSymptoms.join(', ')}\n\n`;
     response += `🩺 **Recommended specialist(s):**\n`;
