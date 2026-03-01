@@ -42,6 +42,7 @@ const doctorSchema = new mongoose.Schema({
       'Nephrologist',
       'Hematologist',
       'Infectious Disease',
+      'Dentist',
       'Other'
     ]
   },
