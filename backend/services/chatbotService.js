@@ -98,6 +98,8 @@ class ChatbotService {
       const MULTI_TURN_INTENTS = new Set([
         'book_appointment', 'cancel_appointment', 'reschedule_appointment'
       ]);
+      // Symptom analysis also supports multi-turn accumulation
+      const SYMPTOM_INTENT = 'symptom_analysis';
       // These intents always break out of any active multi-turn flow
       const EXPLICIT_INTENTS = new Set([
         'greeting', 'farewell', 'thanks', 'how_to_book', 'how_to_cancel',
@@ -128,6 +130,13 @@ class ChatbotService {
           console.log(`[Chatbot] Continuing active flow '${previousIntent}' (was '${intent}', got new entities)`);
           intent = previousIntent;
         }
+      }
+
+      // Continue symptom_analysis when user provides follow-up symptom details
+      if (previousIntent === SYMPTOM_INTENT && intent === 'other') {
+        // User is likely providing more symptom details — continue analysis
+        console.log(`[Chatbot] Continuing symptom_analysis flow (follow-up details)`);
+        intent = SYMPTOM_INTENT;
       }
 
       // Emergency keyword override — always route to urgent_help
@@ -1177,17 +1186,22 @@ class ChatbotService {
       // Heart / Cardiovascular
       'chest pain': 'Cardiologist', 'heart palpitations': 'Cardiologist', 'shortness of breath': 'Cardiologist',
       'high blood pressure': 'Cardiologist', 'irregular heartbeat': 'Cardiologist', 'chest tightness': 'Cardiologist',
+      'heart pain': 'Cardiologist', 'pain in chest': 'Cardiologist', 'pain in heart': 'Cardiologist',
+      'heart problem': 'Cardiologist', 'heart issue': 'Cardiologist', 'chest discomfort': 'Cardiologist',
+      'chest pressure': 'Cardiologist', 'heart racing': 'Cardiologist', 'rapid heartbeat': 'Cardiologist',
       // Skin
       'rash': 'Dermatologist', 'acne': 'Dermatologist', 'skin infection': 'Dermatologist', 'eczema': 'Dermatologist',
       'itching': 'Dermatologist', 'hair loss': 'Dermatologist', 'psoriasis': 'Dermatologist', 'skin allergy': 'Dermatologist',
       'pimples': 'Dermatologist', 'dark spots': 'Dermatologist', 'skin rash': 'Dermatologist',
+      'skin problem': 'Dermatologist', 'skin issue': 'Dermatologist',
       // Brain / Nerves
       'headache': 'Neurologist', 'migraine': 'Neurologist', 'dizziness': 'Neurologist', 'seizure': 'Neurologist',
       'numbness': 'Neurologist', 'tingling': 'Neurologist', 'memory loss': 'Neurologist', 'tremor': 'Neurologist',
+      'head pain': 'Neurologist', 'vertigo': 'Neurologist',
       // Bones / Joints
       'joint pain': 'Orthopedic', 'back pain': 'Orthopedic', 'fracture': 'Orthopedic', 'knee pain': 'Orthopedic',
       'shoulder pain': 'Orthopedic', 'bone pain': 'Orthopedic', 'sprain': 'Orthopedic', 'neck pain': 'Orthopedic',
-      'hip pain': 'Orthopedic', 'muscle pain': 'Orthopedic',
+      'hip pain': 'Orthopedic', 'muscle pain': 'Orthopedic', 'leg pain': 'Orthopedic', 'arm pain': 'Orthopedic',
       // Children
       'child fever': 'Pediatrician', 'baby not eating': 'Pediatrician', 'child rash': 'Pediatrician',
       'child cough': 'Pediatrician', 'child vaccination': 'Pediatrician', 'infant health': 'Pediatrician',
@@ -1225,29 +1239,58 @@ class ChatbotService {
       'fever': 'General Physician', 'cold': 'General Physician', 'flu': 'General Physician',
       'body pain': 'General Physician', 'fatigue': 'General Physician', 'weakness': 'General Physician',
       'weight loss': 'General Physician', 'loss of appetite': 'General Physician', 'general checkup': 'General Physician',
-      'not feeling well': 'General Physician', 'feeling sick': 'General Physician'
+      'not feeling well': 'General Physician', 'feeling sick': 'General Physician',
+      'pain': 'General Physician', 'swelling': 'General Physician', 'infection': 'General Physician',
+      'allergy': 'General Physician', 'bruise': 'General Physician'
     };
 
     const lower = message.toLowerCase();
 
-    // Find matching symptoms in the message
+    // ── Accumulate symptom descriptions across turns ──
+    if (!session.context.symptomHistory) {
+      session.context.symptomHistory = [];
+    }
+    session.context.symptomHistory.push(message);
+    // Keep last 5 symptom messages
+    if (session.context.symptomHistory.length > 5) {
+      session.context.symptomHistory = session.context.symptomHistory.slice(-5);
+    }
+    session.markModified('context');
+
+    // Combine all symptom messages for comprehensive analysis
+    const combinedSymptoms = session.context.symptomHistory.join('. ');
+    const combinedLower = combinedSymptoms.toLowerCase();
+
+    // Find matching symptoms in the COMBINED message (current + previous turns)
     const matchedSymptoms = [];
     const matchedSpecializations = new Set();
 
     for (const [symptom, spec] of Object.entries(symptomMap)) {
-      if (lower.includes(symptom)) {
+      if (combinedLower.includes(symptom)) {
         matchedSymptoms.push(symptom);
         matchedSpecializations.add(spec);
       }
     }
 
-    // If no keyword matches, try AI analysis
+    // If no keyword matches, try AI analysis with full conversation context
     if (matchedSymptoms.length === 0) {
       try {
-        const aiAnalysis = await geminiService.analyzeSymptoms(message);
+        // Pass accumulated symptom history for better AI analysis
+        const symptomContext = session.context.symptomHistory.length > 1
+          ? `Previous messages: ${session.context.symptomHistory.slice(0, -1).join('; ')}\nCurrent message: ${message}`
+          : message;
+        const aiAnalysis = await geminiService.analyzeSymptoms(symptomContext);
         if (aiAnalysis && aiAnalysis.specializations && aiAnalysis.specializations.length > 0) {
+          // Clear symptom history after successful analysis
+          delete session.context.symptomHistory;
+          session.markModified('context');
+
           let response = `Based on your symptoms, here's my analysis:\n\n`;
-          response += `📋 **Symptoms identified:** ${aiAnalysis.symptoms || message}\n\n`;
+          response += `📋 **Symptoms identified:** ${aiAnalysis.symptoms || combinedSymptoms}\n\n`;
+          if (aiAnalysis.severity) {
+            const severityIcon = aiAnalysis.severity === 'severe' ? '🔴' : aiAnalysis.severity === 'moderate' ? '🟡' : '🟢';
+            response += `${severityIcon} **Severity:** ${aiAnalysis.severity}\n\n`;
+          }
           response += `🩺 **Recommended specialist(s):**\n`;
           aiAnalysis.specializations.forEach(spec => {
             response += `• **${spec}**\n`;
@@ -1278,7 +1321,22 @@ class ChatbotService {
         console.error('AI symptom analysis error:', e);
       }
 
-      // Fallback — ask for more details
+      // Even if keyword matching failed, try generating a contextual AI response
+      // instead of a generic "describe more" fallback
+      try {
+        const contextStr = session.history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n');
+        const aiResponse = await geminiService.generateResponse(
+          `The user is describing health symptoms: "${combinedSymptoms}". Provide helpful health guidance, ask relevant follow-up questions about their symptoms, and suggest what type of specialist they might need. Be conversational and empathetic.`,
+          contextStr
+        );
+        if (aiResponse) {
+          return aiResponse + "\n\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**";
+        }
+      } catch (e) {
+        console.error('AI contextual symptom response error:', e);
+      }
+
+      // Last resort fallback — only if both keyword AND AI analysis failed
       return "I'd like to help you find the right doctor! 🩺\n\nCould you describe your symptoms in a bit more detail? For example:\n• Where is the pain or discomfort?\n• How long have you had these symptoms?\n• Any other symptoms like fever, nausea, or dizziness?\n\nThe more you tell me, the better I can suggest the right specialist!\n\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**";
     }
 
