@@ -251,7 +251,7 @@ User message: "${message}"`;
       intent = 'refund_query';
     } else if (/\b(payment|pay|billing|charge|fee|cost|price|how much)\b/.test(lower)) {
       intent = 'payment_info';
-    } else if (/\b(available|availability|free|open slot|when.*available)\b/.test(lower)) {
+    } else if (/\b(available|availability|free|open slot|when.*available)\b/.test(lower) && (/doctor|dr\.|specialist|appointment|slot|schedule/.test(lower) || entities.doctorName || entities.specialization)) {
       intent = 'check_availability';
     } else if (/\b(cancell?ation|cancel)\b/.test(lower)) {
       intent = 'cancel_appointment';
@@ -267,14 +267,14 @@ User message: "${message}"`;
       intent = 'find_doctor';
     } else if (/\b(account|login|sign.*up|register|password|forgot)\b/.test(lower)) {
       intent = 'account_help';
-    } else if (/how.*work|what.*pulseappoint|about.*platform|feature|navigate|where.*page|platform.*(help|support|guide)|how.*use/.test(lower)) {
+    } else if (/how.*work|what.*pulseappoint|about.*platform|feature|navigate|where.*page|what.*page|platform.*(help|support|guide)|how.*use/.test(lower)) {
       intent = 'platform_help';
+    } else if (/\b(urgent|emergency|immediately|asap)\b/.test(lower)) {
+      intent = 'urgent_help';
     } else if (/\b(health|symptom|disease|condition|medicine|treatment|diagnos|sick|pain|fever|cold|cough|headache|rash|acne|vomit|nausea|dizziness|bleeding|swelling|itching|burning|cramp|ache|sore|infection|allergy|breathing|wheez|fatigue|weakness|numbness|tingling|blurr|stomach|chest|joint|back pain|knee|throat|ear pain|anxiety|depression|insomnia|pimple|hair loss|acidity|constipation|diarrhea)\b/.test(lower)) {
       intent = 'symptom_analysis';
     } else if (/\b(complaint|issue|problem|not working|bug|error|wrong)\b/.test(lower)) {
       intent = 'complaint';
-    } else if (/\b(urgent|emergency|immediately|asap)\b/.test(lower)) {
-      intent = 'urgent_help';
     }
 
     // If we found a specialization but intent is still 'other', default to find_doctor

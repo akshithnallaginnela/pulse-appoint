@@ -61,52 +61,59 @@ class ChatbotService {
         }
       }
 
-      // Merge entities into session context
+      // ── Conversation continuation ──────────────────────────────
       if (!session.context) session.context = {};
+
+      // Only these three intents have genuine multi-step flows with pending state
+      const MULTI_TURN_INTENTS = new Set([
+        'book_appointment', 'cancel_appointment', 'reschedule_appointment'
+      ]);
+      // These intents always break out of any active multi-turn flow
+      const EXPLICIT_INTENTS = new Set([
+        'greeting', 'farewell', 'thanks', 'how_to_book', 'how_to_cancel',
+        'how_to_reschedule', 'payment_info', 'refund_query', 'account_help',
+        'platform_help', 'medical_query', 'complaint', 'urgent_help',
+        'view_appointments', 'check_availability', 'symptom_analysis',
+        'book_appointment', 'cancel_appointment', 'reschedule_appointment'
+      ]);
+
+      const previousIntent = session.context.lastIntent;
+
+      // Continue a multi-turn flow only when appropriate
+      if (previousIntent && MULTI_TURN_INTENTS.has(previousIntent)) {
+        const hasNewContext = entities.doctorName || entities.specialization
+          || entities.date || entities.time || entities.appointmentId;
+        const bareNumber = /^\d+$/.test(message.trim());
+
+        // Continue if: unrecognised intent, or bare number selection
+        if (intent === 'other' || bareNumber) {
+          console.log(`[Chatbot] Continuing active flow '${previousIntent}' (current was '${intent}')`);
+          intent = previousIntent;
+        // Continue if: new entities provided AND the new intent isn't an explicit breakout
+        } else if (hasNewContext && !EXPLICIT_INTENTS.has(intent)) {
+          console.log(`[Chatbot] Continuing active flow '${previousIntent}' (was '${intent}', got new entities)`);
+          intent = previousIntent;
+        }
+      }
+
+      // Emergency keyword override — always route to urgent_help
+      const URGENT_PHRASES = ['urgent help', 'emergency', 'dying', 'heart attack',
+        "can't breathe", 'cannot breathe', 'stroke', 'call 911', 'call 108', 'call 112'];
+      const lowerMsg = message.toLowerCase();
+      if (URGENT_PHRASES.some(phrase => lowerMsg.includes(phrase)) && intent !== 'urgent_help') {
+        intent = 'urgent_help';
+      }
+
+      // Clear stale flow context when switching to a genuinely new intent
+      if (intent !== previousIntent && intent !== 'other' && previousIntent) {
+        this._clearStaleFlowContext(session, intent);
+      }
+
+      // Merge current message entities into session context (AFTER continuation logic)
       if (entities.specialization) session.context.specialization = entities.specialization;
       if (entities.doctorName) session.context.doctorName = entities.doctorName;
       if (entities.date) session.context.date = entities.date;
       if (entities.time) session.context.time = entities.time;
-
-      // ── Conversation continuation ──────────────────────────────
-      const MULTI_TURN_INTENTS = new Set([
-        'book_appointment', 'check_availability', 'find_doctor', 'doctor_details',
-        'cancel_appointment', 'reschedule_appointment', 'symptom_analysis'
-      ]);
-      const ENTITY_ONLY_INTENTS = new Set(['find_doctor']);
-      const EXPLICIT_INTENTS = new Set([
-        'greeting', 'farewell', 'thanks', 'how_to_book', 'how_to_cancel',
-        'how_to_reschedule', 'payment_info', 'refund_query', 'account_help',
-        'platform_help', 'medical_query', 'complaint', 'urgent_help'
-      ]);
-
-      const previousIntent = session.context.lastIntent;
-      if (previousIntent && MULTI_TURN_INTENTS.has(previousIntent)) {
-        const hasNewContext = entities.doctorName || entities.specialization
-          || entities.date || entities.time || entities.appointmentId;
-
-        // Also check if user typed a bare number (doctor/appointment selection)
-        const bareNumber = /^\d+$/.test(message.trim());
-
-        // When in a multi-turn flow, ALWAYS continue if intent is 'other'
-        // (e.g. user typed "march 12th" which doesn't match any explicit intent)
-        if (intent === 'other') {
-          console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (current was 'other')`);
-          intent = previousIntent;
-        } else if (hasNewContext || bareNumber) {
-          if (!EXPLICIT_INTENTS.has(intent) && previousIntent !== intent) {
-            console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (was '${intent}', got new entities)`);
-            intent = previousIntent;
-          }
-        }
-      } else if (intent === 'other' && previousIntent) {
-        const hasNewContext = entities.doctorName || entities.specialization
-          || entities.date || entities.time;
-        if (hasNewContext) {
-          console.log(`[Chatbot] Continuing previous intent '${previousIntent}' (current was 'other' with new entities)`);
-          intent = previousIntent;
-        }
-      }
 
       // Save the resolved intent for future continuation (skip 'other')
       if (intent !== 'other') {
@@ -465,6 +472,7 @@ class ChatbotService {
       delete session.context.doctorName;
       delete session.context.date;
       delete session.context.time;
+      session.context.lastIntent = null;
       session.markModified('context');
 
       return `✅ **Appointment booked successfully!**\n\n📋 **Booking Summary:**\n• **Doctor:** ${selectedDoctorName || 'Selected doctor'}\n• **Date:** ${appointmentDate.toDateString()}\n• **Time:** ${appointmentTime}\n• **Fee:** ₹${doctor.consultationFee}\n• **Status:** Pending confirmation\n• **Appointment ID:** ${appointment._id}\n\n💳 **Next step:** Complete your payment on the **Appointments** page to confirm the booking.\n\nWould you like help with anything else?`;
@@ -716,6 +724,7 @@ class ChatbotService {
       // Clean up context
       delete session.context.cancelCandidates;
       delete session.context.pendingCancelId;
+      session.context.lastIntent = null;
       session.markModified('context');
 
       let refundMsg = '';
@@ -932,6 +941,54 @@ class ChatbotService {
     delete session.context.rescheduleCandidates;
     delete session.context.rescheduleNewDate;
     delete session.context.rescheduleNewTime;
+    session.context.lastIntent = null;
+    session.markModified('context');
+  }
+
+  // ─── CONTEXT CLEANUP HELPERS ────────────────────────────────
+
+  /**
+   * Clear stale flow context when switching to a different intent.
+   * Prevents context pollution from abandoned or completed flows.
+   */
+  _clearStaleFlowContext(session, newIntent) {
+    const ctx = session.context;
+
+    // Clear booking context if not continuing booking
+    if (newIntent !== 'book_appointment') {
+      delete ctx.selectedDoctorId;
+      delete ctx.selectedDoctorName;
+      delete ctx.selectedDoctorFee;
+      delete ctx.candidateDoctors;
+    }
+
+    // Clear reschedule context if not continuing reschedule
+    if (newIntent !== 'reschedule_appointment') {
+      delete ctx.rescheduleTargetId;
+      delete ctx.rescheduleDoctorId;
+      delete ctx.rescheduleCandidates;
+      delete ctx.rescheduleNewDate;
+      delete ctx.rescheduleNewTime;
+    }
+
+    // Clear cancel context if not continuing cancel
+    if (newIntent !== 'cancel_appointment') {
+      delete ctx.cancelCandidates;
+      delete ctx.pendingCancelId;
+    }
+
+    // Clear accumulated entities for intents that don't use them
+    const ENTITY_USING_INTENTS = new Set([
+      'book_appointment', 'find_doctor', 'doctor_details',
+      'check_availability'
+    ]);
+    if (!ENTITY_USING_INTENTS.has(newIntent)) {
+      delete ctx.specialization;
+      delete ctx.doctorName;
+      delete ctx.date;
+      delete ctx.time;
+    }
+
     session.markModified('context');
   }
 
@@ -1353,11 +1410,14 @@ class ChatbotService {
       return new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
     }
 
-    // Last resort: native Date parsing
-    const parsed = new Date(dateStr);
-    if (!isNaN(parsed.getTime())) {
-      parsed.setHours(0, 0, 0, 0);
-      return parsed;
+    // Last resort: native Date parsing — reject bare numbers and very short strings
+    // e.g. new Date("1") returns Jan 1 2001 which is wrong
+    if (lower.length >= 6 && !/^\d{1,4}$/.test(lower)) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        parsed.setHours(0, 0, 0, 0);
+        return parsed;
+      }
     }
 
     return null;
