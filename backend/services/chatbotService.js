@@ -75,6 +75,22 @@ class ChatbotService {
         }
       }
 
+      // Validate simple intents — Gemini sometimes misclassifies casual messages
+      // as greeting/farewell/thanks when they aren't
+      const lowerTrimmed = message.toLowerCase().trim();
+      if (intent === 'greeting' && !/\b(hi|hello|hey|good morning|good evening|good afternoon|howdy|greetings)\b/.test(lowerTrimmed)) {
+        console.log(`[Chatbot] Overriding 'greeting' — no greeting keywords found in: "${message}"`);
+        intent = 'other';
+      }
+      if (intent === 'farewell' && !/\b(bye|goodbye|see you|take care|good night|later|cya)\b/.test(lowerTrimmed)) {
+        console.log(`[Chatbot] Overriding 'farewell' — no farewell keywords found in: "${message}"`);
+        intent = 'other';
+      }
+      if (intent === 'thanks' && !/\b(thanks|thank you|thank|appreciate|thx|ty)\b/.test(lowerTrimmed)) {
+        console.log(`[Chatbot] Overriding 'thanks' — no thanks keywords found in: "${message}"`);
+        intent = 'other';
+      }
+
       // ── Conversation continuation ──────────────────────────────
       if (!session.context) session.context = {};
 
