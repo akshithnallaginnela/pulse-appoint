@@ -46,11 +46,14 @@ router.get('/', validatePagination, validateSearch, async (req, res) => {
       sort.consultationFee = sortOrder === 'desc' ? -1 : 1;
     }
 
-    const doctors = await Doctor.find({ ...filter, ...searchQuery })
+    const rawDoctors = await Doctor.find({ ...filter, ...searchQuery })
       .populate('userId', 'firstName lastName email profileImage')
       .sort(sort)
       .skip(skip)
       .limit(limit);
+
+    // Filter out doctors whose user account no longer exists
+    const doctors = rawDoctors.filter(d => d.userId != null);
 
     const total = await Doctor.countDocuments({ ...filter, ...searchQuery });
 

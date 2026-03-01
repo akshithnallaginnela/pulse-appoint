@@ -147,7 +147,7 @@ const Doctors = () => {
           {!isLoading && (
             <>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                {doctors.map((doctor) => (
+                {doctors.filter((d) => d.userId).map((doctor) => (
                   <DoctorCard 
                     key={doctor._id} 
                     id={doctor._id}
