@@ -15,16 +15,17 @@ import { usersAPI } from '@/services/api';
 import { User, Lock, MapPin, Phone, Heart } from 'lucide-react';
 
 const Settings = () => {
-  const { user, isAuthenticated, refreshProfile } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Redirect if not authenticated
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       navigate('/login');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, authLoading, navigate]);
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
