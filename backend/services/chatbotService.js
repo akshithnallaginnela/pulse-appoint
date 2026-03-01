@@ -995,17 +995,13 @@ class ChatbotService {
       delete ctx.pendingCancelId;
     }
 
-    // Clear accumulated entities for intents that don't use them
-    const ENTITY_USING_INTENTS = new Set([
-      'book_appointment', 'find_doctor', 'doctor_details',
-      'check_availability'
-    ]);
-    if (!ENTITY_USING_INTENTS.has(newIntent)) {
-      delete ctx.specialization;
-      delete ctx.doctorName;
-      delete ctx.date;
-      delete ctx.time;
-    }
+    // Always clear accumulated entities when switching intents.
+    // Current-message entities are re-merged immediately after this call,
+    // so only stale entities from previous turns are removed.
+    delete ctx.specialization;
+    delete ctx.doctorName;
+    delete ctx.date;
+    delete ctx.time;
 
     session.markModified('context');
   }
