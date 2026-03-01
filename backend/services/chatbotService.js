@@ -1286,10 +1286,6 @@ class ChatbotService {
           : message;
         const aiAnalysis = await geminiService.analyzeSymptoms(symptomContext);
         if (aiAnalysis && aiAnalysis.specializations && aiAnalysis.specializations.length > 0) {
-          // Clear symptom history after successful analysis
-          delete session.context.symptomHistory;
-          session.markModified('context');
-
           let response = `Based on your symptoms, here's my analysis:\n\n`;
           response += `📋 **Symptoms identified:** ${aiAnalysis.symptoms || combinedSymptoms}\n\n`;
           if (aiAnalysis.severity) {
@@ -1329,27 +1325,46 @@ class ChatbotService {
       // Even if keyword matching failed, try generating a contextual AI response
       // instead of a generic "describe more" fallback
       try {
-        const contextStr = session.history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n');
+        // Build a rich prompt that includes the full conversation history
+        const recentHistory = session.history.slice(-8).map(h => `${h.role}: ${h.content}`).join('\n');
+        const allSymptoms = session.context.symptomHistory ? session.context.symptomHistory.join('; ') : message;
         const aiResponse = await geminiService.generateResponse(
-          `The user is describing health symptoms: "${combinedSymptoms}". Provide helpful health guidance, ask relevant follow-up questions about their symptoms, and suggest what type of specialist they might need. Be conversational and empathetic.`,
-          contextStr
+          `The user is continuing to describe their health symptoms on a doctor appointment platform.
+
+All symptom messages so far: "${allSymptoms}"
+Latest message: "${message}"
+
+Provide a helpful, conversational response that:
+1. Acknowledges the specific details they've shared (location, duration, severity)
+2. Asks relevant targeted follow-up questions if needed
+3. Gives practical general health advice relevant to their symptoms
+4. Suggests what type of medical specialist they should see based on all described symptoms
+5. Be empathetic and thorough — respond like a knowledgeable health assistant
+
+Do NOT just ask them to "describe more" — they already are describing. Engage with what they've told you.`,
+          recentHistory
         );
         if (aiResponse) {
-          return aiResponse + "\n\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**";
+          return aiResponse + "\n\n⚠️ **Disclaimer:** This is AI-based guidance, not a medical diagnosis.\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**";
         }
       } catch (e) {
         console.error('AI contextual symptom response error:', e);
       }
 
-      // Last resort fallback — only if both keyword AND AI analysis failed
+      // Last resort fallback — provide a helpful response from conversation context
+      // instead of a generic "describe more" message
+      const prevHistory = session.history.slice(-6);
+      const prevAnalysis = prevHistory.find(h => h.role === 'assistant' && h.content.includes('Recommended specialist'));
+      if (prevAnalysis) {
+        // We already gave a recommendation in the recent conversation — acknowledge the follow-up
+        return `Thank you for the additional details! 🩺\n\nBased on what you've described so far, I'd still recommend consulting the specialist I suggested earlier. The details about location and duration will be very helpful for your doctor.\n\n**Things to note for your doctor visit:**\n• Location of pain/discomfort: ${message}\n• Mention all symptoms you've experienced\n• Bring any relevant medical history\n\nWould you like me to **book an appointment** with one of the recommended doctors? Or do you have more symptoms to share?\n\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**`;
+      }
+
       return "I'd like to help you find the right doctor! 🩺\n\nCould you describe your symptoms in a bit more detail? For example:\n• Where is the pain or discomfort?\n• How long have you had these symptoms?\n• Any other symptoms like fever, nausea, or dizziness?\n\nThe more you tell me, the better I can suggest the right specialist!\n\n⚠️ **For emergencies, please call 108 or visit your nearest hospital immediately.**";
     }
 
     // Build response from keyword matches
     const specs = Array.from(matchedSpecializations);
-    // Clear symptom history after successful keyword analysis
-    delete session.context.symptomHistory;
-    session.markModified('context');
 
     let response = `Based on your symptoms, here's what I recommend:\n\n`;
     response += `📋 **Symptoms detected:** ${matchedSymptoms.join(', ')}\n\n`;
