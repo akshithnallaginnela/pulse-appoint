@@ -26,6 +26,7 @@ import {
   Calendar,
   DollarSign,
   Activity,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminAPI } from "@/services/api";
@@ -59,6 +60,7 @@ const AdminPanel = () => {
   const [stats, setStats] = useState<any>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [verifyingDoctorId, setVerifyingDoctorId] = useState<string | null>(null);
 
   // If the user is already logged in as admin, go to dashboard tab
   useEffect(() => {
@@ -140,14 +142,29 @@ const AdminPanel = () => {
   };
 
   const handleVerifyDoctor = async (doctorId: string, isVerified: boolean) => {
+    setVerifyingDoctorId(doctorId);
     try {
       await adminAPI.verifyDoctor(doctorId, isVerified);
       toast.success(
         `Doctor ${isVerified ? "verified" : "unverified"} successfully`
       );
-      fetchDashboardData();
+      // Update the local doctors list immediately for instant UI feedback
+      setDoctors((prev) =>
+        prev.map((doc) =>
+          doc._id === doctorId ? { ...doc, isVerified } : doc
+        )
+      );
+      // Silently refresh stats in background (without showing full-page spinner)
+      try {
+        const statsRes = await adminAPI.getDashboardStats();
+        setStats(statsRes.stats);
+      } catch (e) {
+        // Stats refresh is non-critical
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to update doctor status");
+    } finally {
+      setVerifyingDoctorId(null);
     }
   };
 
@@ -698,23 +715,33 @@ const AdminPanel = () => {
                           {!doctor.isVerified ? (
                             <Button
                               size="sm"
+                              disabled={verifyingDoctorId === doctor._id}
                               onClick={() =>
                                 handleVerifyDoctor(doctor._id, true)
                               }
                             >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Verify
+                              {verifyingDoctorId === doctor._id ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                              )}
+                              {verifyingDoctorId === doctor._id ? "Verifying..." : "Verify"}
                             </Button>
                           ) : (
                             <Button
                               size="sm"
                               variant="outline"
+                              disabled={verifyingDoctorId === doctor._id}
                               onClick={() =>
                                 handleVerifyDoctor(doctor._id, false)
                               }
                             >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Unverify
+                              {verifyingDoctorId === doctor._id ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <XCircle className="h-4 w-4 mr-1" />
+                              )}
+                              {verifyingDoctorId === doctor._id ? "Updating..." : "Unverify"}
                             </Button>
                           )}
                         </div>
