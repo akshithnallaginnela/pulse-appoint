@@ -61,6 +61,20 @@ class ChatbotService {
         }
       }
 
+      // Safety net: if Gemini returned 'other', try keyword-based fallback
+      // This catches cases where Gemini misclassifies clear requests
+      if (intent === 'other') {
+        const fallbackAnalysis = geminiService._fallbackIntentAnalysis(message);
+        if (fallbackAnalysis.intent !== 'other') {
+          console.log(`[Chatbot] Gemini returned 'other', fallback detected '${fallbackAnalysis.intent}'`);
+          intent = fallbackAnalysis.intent;
+          // Merge any entities the fallback detected
+          Object.entries(fallbackAnalysis.entities).forEach(([key, value]) => {
+            if (value && !entities[key]) entities[key] = value;
+          });
+        }
+      }
+
       // ── Conversation continuation ──────────────────────────────
       if (!session.context) session.context = {};
 
@@ -85,9 +99,13 @@ class ChatbotService {
           || entities.date || entities.time || entities.appointmentId;
         const bareNumber = /^\d+$/.test(message.trim());
 
-        // Continue if: unrecognised intent, or bare number selection
-        if (intent === 'other' || bareNumber) {
-          console.log(`[Chatbot] Continuing active flow '${previousIntent}' (current was '${intent}')`);
+        // Continue if: bare number (selection from a list)
+        if (bareNumber) {
+          console.log(`[Chatbot] Continuing active flow '${previousIntent}' (bare number selection)`);
+          intent = previousIntent;
+        // Continue if: intent is still 'other' AND message provides relevant data for the flow
+        } else if (intent === 'other' && hasNewContext) {
+          console.log(`[Chatbot] Continuing active flow '${previousIntent}' (unrecognised with new entities)`);
           intent = previousIntent;
         // Continue if: new entities provided AND the new intent isn't an explicit breakout
         } else if (hasNewContext && !EXPLICIT_INTENTS.has(intent)) {
@@ -1426,7 +1444,8 @@ class ChatbotService {
   // ─── TIME PARSING HELPER ─────────────────────────
   _parseTime(timeStr) {
     if (!timeStr) return null;
-    const lower = timeStr.toLowerCase().trim();
+    // Normalize dots to colons (support "10.00 am" format)
+    const lower = timeStr.toLowerCase().trim().replace(/(\d)\.(\d{2})/g, '$1:$2');
 
     // "10:00 AM", "2:30 PM", "10:00am"
     const ampmMatch = lower.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/);

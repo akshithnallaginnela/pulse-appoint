@@ -257,13 +257,15 @@ User message: "${message}"`;
       intent = 'cancel_appointment';
     } else if (/\b(reschedule|change.*time|move.*appointment)\b/.test(lower)) {
       intent = 'reschedule_appointment';
-    } else if (/\b(book|schedule|appointment|make an appointment)\b/.test(lower)) {
-      intent = 'book_appointment';
-    } else if (/\b(my appointment|view|upcoming|list.*appointment|appointment.*history)\b/.test(lower)) {
+    } else if (/\b(my appointments?|show.*appointments?|view.*appointments?|upcoming.*appointments?|list.*appointments?|appointments?.*history)\b/.test(lower)) {
       intent = 'view_appointments';
-    } else if (/doctor.*detail|about.*doctor|doctor.*info|profile|qualifi|experience|rating|review/.test(lower)) {
+    } else if (/\b(complaint|issue|problem|not working|bug|error|wrong|bad experience|poor experience|disappointed|terrible|dissatisfied|unsatisfied)\b/.test(lower)) {
+      intent = 'complaint';
+    } else if (/\b(book|schedule)\b/.test(lower) || /\bmake an appointment\b/.test(lower)) {
+      intent = 'book_appointment';
+    } else if (/doctor.*detail|about.*(doctor|dr\.?\s)|tell.*about.*(doctor|dr\.?\s)|tell.*more.*about|doctor.*info|profile|qualifi|experience|rating|review/.test(lower)) {
       intent = 'doctor_details';
-    } else if (/\b(find|search|looking for|doctor|specialist)\b/.test(lower) || entities.specialization) {
+    } else if (/\b(find|search|looking for|specialist)\b/.test(lower) || entities.specialization) {
       intent = 'find_doctor';
     } else if (/\b(account|login|sign.*up|register|password|forgot)\b/.test(lower)) {
       intent = 'account_help';
@@ -271,10 +273,10 @@ User message: "${message}"`;
       intent = 'platform_help';
     } else if (/\b(urgent|emergency|immediately|asap)\b/.test(lower)) {
       intent = 'urgent_help';
+    } else if (/what (are|is) .*(symptom|cause|treatment|sign|risk)|tell me about .*(disease|condition|illness)|how to (prevent|treat|cure)/.test(lower)) {
+      intent = 'medical_query';
     } else if (/\b(health|symptom|disease|condition|medicine|treatment|diagnos|sick|pain|fever|cold|cough|headache|rash|acne|vomit|nausea|dizziness|bleeding|swelling|itching|burning|cramp|ache|sore|infection|allergy|breathing|wheez|fatigue|weakness|numbness|tingling|blurr|stomach|chest|joint|back pain|knee|throat|ear pain|anxiety|depression|insomnia|pimple|hair loss|acidity|constipation|diarrhea)\b/.test(lower)) {
       intent = 'symptom_analysis';
-    } else if (/\b(complaint|issue|problem|not working|bug|error|wrong)\b/.test(lower)) {
-      intent = 'complaint';
     }
 
     // If we found a specialization but intent is still 'other', default to find_doctor
